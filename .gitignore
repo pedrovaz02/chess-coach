@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dados (NUNCA fazer commit de dados grandes)
+data/*
+!data/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Variáveis de ambiente
+.env
