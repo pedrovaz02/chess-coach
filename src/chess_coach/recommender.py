@@ -11,6 +11,7 @@ Steps:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import joblib
@@ -40,20 +41,29 @@ def predict_cluster(user_features: pl.DataFrame, scaler, model) -> int:
     return int(model.predict(X_scaled)[0])
 
 
-# Openings whose NAME marks them as Black's strategic choice.
-# Anything matching this regex in opening_name is excluded from "as White"
-# recommendations: White can't *choose* a defense — Black plays a defense in
-# response to White's first move.
-_BLACK_OPENING_PATTERNS = (
-    "defense", "defence",       # Sicilian Defense, Caro-Kann Defense, etc.
-    "indian",                   # KID, QID, NID, Bogo-Indian, Nimzo-Indian
-    "marshall attack",          # Black's attack in the Ruy Lopez
-    "schliemann",               # Black's gambit vs Ruy Lopez
-    "albin counter",            # Black's counter-gambit vs Queen's Gambit
-    "benoni", "benko",          # Black's pawn structures
-    "grünfeld", "grunfeld",     # Black's defense vs 1.d4
+# Opening → color classifier. Built once from the Lichess openings TSVs by
+# `scripts/build_openings_db.py`: each opening is classified by whose move
+# was last in its canonical PGN. This is more accurate than a name regex —
+# "Sicilian Defense: Najdorf, English Attack" is correctly White-led even
+# though "Defense" is in the name, because Be3 is the defining last move.
+_OPENINGS_PATH = Path(__file__).parent / "openings.json"
+_OPENINGS_DATA: dict[str, str] | None = None
+
+
+def _load_openings() -> dict[str, str]:
+    global _OPENINGS_DATA
+    if _OPENINGS_DATA is None:
+        _OPENINGS_DATA = json.loads(_OPENINGS_PATH.read_text())
+    return _OPENINGS_DATA
+
+
+# Regex fallback for the ~0.6% of opening names not in the classifier
+# (deeper sub-variations that appear in our data but not in the canonical TSV).
+_FALLBACK_BLACK_PATTERNS = (
+    "defense", "defence", "indian", "marshall attack", "schliemann",
+    "albin counter", "benoni", "benko", "grünfeld", "grunfeld",
 )
-_BLACK_REGEX = "(?i)" + "|".join(_BLACK_OPENING_PATTERNS)
+_FALLBACK_REGEX = "(?i)" + "|".join(_FALLBACK_BLACK_PATTERNS)
 
 
 def opening_rankings(
@@ -93,8 +103,21 @@ def opening_rankings(
         .otherwise(0.0)
     )
 
-    is_black_opening = pl.col("opening_name").str.contains(_BLACK_REGEX)
-    color_filter = ~is_black_opening if color == "white" else is_black_opening
+    # Color classification: lookup in opening DB first, regex as fallback.
+    openings_db = _load_openings()
+    # Build a polars expression: opening_name → "white" | "black" | None
+    # We do this via a Python-side mapping converted to a polars literal lookup.
+    classified_color = (
+        pl.col("opening_name")
+        .replace_strict(openings_db, default=None, return_dtype=pl.String)
+    )
+    # Fallback regex for names not in the DB
+    fallback_is_black = pl.col("opening_name").str.contains(_FALLBACK_REGEX)
+    fallback_color = (
+        pl.when(fallback_is_black).then(pl.lit("black")).otherwise(pl.lit("white"))
+    )
+    effective_color = pl.when(classified_color.is_not_null()).then(classified_color).otherwise(fallback_color)
+    color_filter = effective_color == color
 
     return (
         games.join(members, on="username", how="inner")
