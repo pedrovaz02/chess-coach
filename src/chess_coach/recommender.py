@@ -40,6 +40,22 @@ def predict_cluster(user_features: pl.DataFrame, scaler, model) -> int:
     return int(model.predict(X_scaled)[0])
 
 
+# Openings whose NAME marks them as Black's strategic choice.
+# Anything matching this regex in opening_name is excluded from "as White"
+# recommendations: White can't *choose* a defense — Black plays a defense in
+# response to White's first move.
+_BLACK_OPENING_PATTERNS = (
+    "defense", "defence",       # Sicilian Defense, Caro-Kann Defense, etc.
+    "indian",                   # KID, QID, NID, Bogo-Indian, Nimzo-Indian
+    "marshall attack",          # Black's attack in the Ruy Lopez
+    "schliemann",               # Black's gambit vs Ruy Lopez
+    "albin counter",            # Black's counter-gambit vs Queen's Gambit
+    "benoni", "benko",          # Black's pawn structures
+    "grünfeld", "grunfeld",     # Black's defense vs 1.d4
+)
+_BLACK_REGEX = "(?i)" + "|".join(_BLACK_OPENING_PATTERNS)
+
+
 def opening_rankings(
     games: pl.DataFrame,
     clustered_players: pl.DataFrame,
@@ -52,13 +68,17 @@ def opening_rankings(
     (mean of actual - Elo-expected) across all games of cluster members in
     that opening. Filtered to openings with >= min_games_in_opening samples.
 
+    Color-appropriate filter:
+        For color="white", we exclude openings characterised as Black's choice
+        (defenses, Indian setups, Marshall, etc.) — White can't choose what
+        Black plays against them.
+
+        For color="black", we keep only openings characterised as Black's
+        choice — these are responses Black can actually steer toward.
+
     Why skill-adjusted instead of raw win rate:
         Two openings can have the same raw win rate while one is played
         against weaker opposition. Score residual normalises for that.
-
-    The numeric residual is kept internally for ranking but is not surfaced
-    to the user — we only show ranks, because residuals against opponents at
-    GM level don't translate cleanly to "what *you* will score".
     """
     members = clustered_players.filter(pl.col("cluster") == cluster).select("username")
 
@@ -73,10 +93,16 @@ def opening_rankings(
         .otherwise(0.0)
     )
 
+    is_black_opening = pl.col("opening_name").str.contains(_BLACK_REGEX)
+    color_filter = ~is_black_opening if color == "white" else is_black_opening
+
     return (
         games.join(members, on="username", how="inner")
         .filter(
-            (pl.col("color") == color) & pl.col("opening_eco").is_not_null()
+            (pl.col("color") == color)
+            & pl.col("opening_eco").is_not_null()
+            & pl.col("opening_name").is_not_null()
+            & color_filter
         )
         .with_columns(score_diff=(actual - expected))
         .group_by(["opening_eco", "opening_name"])
