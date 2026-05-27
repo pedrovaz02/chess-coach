@@ -14,19 +14,24 @@ built on skill-adjusted features, so style is separated from raw rating.
 ```
 $ uv run python -m chess_coach.recommender pedrovaz02
 
-pedrovaz02 -> cluster 1 (under-rated overperformers, varied repertoire)
+pedrovaz02 -> cluster 1
+Openings ranked by how well players with your style profile have historically
+done with them.
 
-Top openings as White                       Top openings as Black
-- D35  QGD: Exchange / Positional  85.7%   - B10  Caro-Kann Defense         93.3%
-- B30  Rossolimo Attack            80.0%   - B30  Sicilian: Old Sicilian    75.0%
-- D02  London System               78.3%   - B00  Owen Defense              73.3%
-- D01  Rapport-Jobava System       76.9%   - A45  Indian: Accelerated London 72.7%
-- A05  Zukertort / Nimzo-Larsen    66.7%   - B06  Modern Defense            72.7%
+Suggested openings as White                   Suggested openings as Black
+1. B30  Rossolimo Attack      (15 games)      1. B10  Caro-Kann Defense           (15)
+2. A05  Nimzo-Larsen          (15 games)      2. A45  Indian: Acc. London         (22)
+3. D35  QGD: Exchange         (21 games)      3. B30  Sicilian: Old Sicilian      (16)
+4. D02  London System         (23 games)      4. B00  Owen Defense                (15)
+5. D01  Rapport-Jobava System (26 games)      5. C78  Ruy Lopez: Morphy Defense   (19)
 ```
 
-Win rates are aggregated across all players in the same cluster — not a
-prediction of how *you* will score with each opening. See
-[Limitations](#limitations).
+The ranking is by **Elo-adjusted score residual** (actual − expected score
+given opponent rating) across all games of cluster members in that opening.
+Raw percentages are deliberately not shown — they reflect win rates of 2300+
+players against 2300+ opposition, and showing them as if they applied to any
+user would be misleading. The number in parentheses is sample size: more
+games supporting the recommendation = more confidence in the ordering.
 
 ---
 

@@ -48,52 +48,89 @@ def opening_rankings(
     min_games_in_opening: int = 30,
     top_n: int = 10,
 ) -> pl.DataFrame:
-    """Top openings for a (cluster, color), by win rate across all players in
-    that cluster, filtered to openings with >= min_games_in_opening samples.
+    """Top openings for a (cluster, color), ranked by skill-adjusted score
+    (mean of actual - Elo-expected) across all games of cluster members in
+    that opening. Filtered to openings with >= min_games_in_opening samples.
+
+    Why skill-adjusted instead of raw win rate:
+        Two openings can have the same raw win rate while one is played
+        against weaker opposition. Score residual normalises for that.
+
+    The numeric residual is kept internally for ranking but is not surfaced
+    to the user — we only show ranks, because residuals against opponents at
+    GM level don't translate cleanly to "what *you* will score".
     """
     members = clustered_players.filter(pl.col("cluster") == cluster).select("username")
+
+    expected = 1.0 / (
+        1.0 + (10.0 ** ((pl.col("opponent_rating") - pl.col("user_rating")) / 400.0))
+    )
+    actual = (
+        pl.when(pl.col("result") == "win")
+        .then(1.0)
+        .when(pl.col("result") == "draw")
+        .then(0.5)
+        .otherwise(0.0)
+    )
 
     return (
         games.join(members, on="username", how="inner")
         .filter(
-            (pl.col("color") == color)
-            & pl.col("opening_eco").is_not_null()
+            (pl.col("color") == color) & pl.col("opening_eco").is_not_null()
         )
+        .with_columns(score_diff=(actual - expected))
         .group_by(["opening_eco", "opening_name"])
         .agg(
             n=pl.len(),
-            win_rate=(pl.col("result") == "win").mean(),
-            draw_rate=(pl.col("result") == "draw").mean(),
+            score_residual=pl.col("score_diff").mean(),
         )
         .filter(pl.col("n") >= min_games_in_opening)
-        .sort("win_rate", descending=True)
+        .sort("score_residual", descending=True)
         .head(top_n)
     )
 
 
 def render_recommendations(
-    console: Console, username: str, cluster: int, white: pl.DataFrame, black: pl.DataFrame
+    console: Console,
+    username: str,
+    cluster: int,
+    white: pl.DataFrame,
+    black: pl.DataFrame,
+    verbose: bool = False,
 ) -> None:
     console.print(
-        f"\n[bold green]{username}[/bold green] → cluster [bold]{cluster}[/bold]\n"
+        f"\n[bold green]{username}[/bold green] -> cluster [bold]{cluster}[/bold]"
+    )
+    console.print(
+        "[dim]Openings ranked by how well players with your style profile "
+        "have historically done with them.[/dim]\n"
     )
 
     for color, df in (("White", white), ("Black", black)):
-        table = Table(title=f"Top openings for cluster {cluster} as {color}")
+        if df.is_empty():
+            console.print(f"[yellow]No openings as {color} cleared the sample-size threshold.[/yellow]")
+            continue
+
+        table = Table(title=f"Suggested openings as {color}", title_justify="left")
+        table.add_column("#", style="bold")
         table.add_column("ECO")
         table.add_column("Opening")
-        table.add_column("Games", justify="right")
-        table.add_column("Win %", justify="right")
-        table.add_column("Draw %", justify="right")
-        for row in df.iter_rows(named=True):
-            table.add_row(
+        table.add_column("Support", justify="right", style="dim")
+        if verbose:
+            table.add_column("Score res.", justify="right", style="dim")
+
+        for rank, row in enumerate(df.iter_rows(named=True), start=1):
+            cells = [
+                str(rank),
                 row["opening_eco"],
                 row["opening_name"],
-                str(row["n"]),
-                f"{row['win_rate']*100:.1f}",
-                f"{row['draw_rate']*100:.1f}",
-            )
+                f"{row['n']} games",
+            ]
+            if verbose:
+                cells.append(f"{row['score_residual']:+.3f}")
+            table.add_row(*cells)
         console.print(table)
+        console.print()
 
 
 def main() -> None:
@@ -102,6 +139,11 @@ def main() -> None:
     parser.add_argument("--max-games", type=int, default=100)
     parser.add_argument("--top-n", type=int, default=10)
     parser.add_argument("--min-opening-games", type=int, default=30)
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="Show internal scoring (score residual). Off by default to keep "
+             "the UX honest — see README for why."
+    )
     parser.add_argument(
         "--games", type=Path, default=DATA_DIR / "games.parquet"
     )
@@ -131,7 +173,9 @@ def main() -> None:
         games, clustered, cluster, "black",
         min_games_in_opening=args.min_opening_games, top_n=args.top_n,
     )
-    render_recommendations(console, args.username, cluster, white, black)
+    render_recommendations(
+        console, args.username, cluster, white, black, verbose=args.verbose
+    )
 
 
 if __name__ == "__main__":
