@@ -47,28 +47,28 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 CLUSTER_PROFILES: dict[int, dict[str, str]] = {
     0: {
         "name": "Blitz brawler",
-        "blurb": "Time-pressure addict. Lots of games lost on the clock, "
-                 "few draws, balanced opening choices.",
+        "blurb": "High mate rate, frequent time losses. Plays fast and "
+                 "aggressively, lets the clock decide many games.",
     },
     1: {
-        "name": "Underrated aggressive",
-        "blurb": "Significantly outperforming your rating. Sharp Sicilian "
-                 "defender, varied repertoire.",
+        "name": "Balanced amateur",
+        "blurb": "Lower rating band, no strong stylistic extremes. "
+                 "Plays the position, doesn't force the game.",
     },
     2: {
-        "name": "1.d4 specialist",
-        "blurb": "Queen's pawn devotee. 47% of your White games start 1.d4, "
-                 "only 10% with 1.e4.",
+        "name": "Sicilian devotee",
+        "blurb": "When facing 1.e4 as Black, plays the Sicilian 90% of the "
+                 "time. Sharp, asymmetrical positions.",
     },
     3: {
-        "name": "Elite e4 generalist",
-        "blurb": "Classical 1.e4 style, broad repertoire, longest games, "
-                 "highest draw rate.",
+        "name": "Underrated overperformer",
+        "blurb": "Outperforming the Elo expectation by ~12 score points "
+                 "per game. Rating likely catching up to actual strength.",
     },
     4: {
-        "name": "1.e4 dogmatist",
-        "blurb": "Almost-exclusive 1.e4 White player (87%), short decisive "
-                 "games, narrow repertoire.",
+        "name": "1.d4 specialist",
+        "blurb": "Queen's-pawn player. ~42% of your White games start 1.d4 "
+                 "(vs ~6% for the average player). Solid, positional.",
     },
 }
 
