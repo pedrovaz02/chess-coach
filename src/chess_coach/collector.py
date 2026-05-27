@@ -21,17 +21,33 @@ from pathlib import Path
 
 import polars as pl
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-)
 
 
 LICHESS_API = "https://lichess.org/api"
+
+
+def _make_session() -> requests.Session:
+    """Session with automatic retry+backoff on 429 / 5xx and connection errors.
+
+    Lichess will silently slow-roll requests if you hammer them; the retry
+    layer turns those into observable failures we can back off from.
+    """
+    session = requests.Session()
+    retry = Retry(
+        total=4,
+        backoff_factor=2.0,  # 0s, 2s, 4s, 8s
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+        respect_retry_after_header=True,
+    )
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+
+
+_SESSION = _make_session()
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 GAME_COLUMNS = [
@@ -42,6 +58,7 @@ GAME_COLUMNS = [
     "result",
     "status",
     "n_moves",
+    "moves",
     "opening_eco",
     "opening_name",
     "speed",
@@ -55,12 +72,19 @@ GAME_COLUMNS = [
 
 def fetch_top_players(perf_type: str, count: int) -> list[str]:
     url = f"{LICHESS_API}/player/top/{count}/{perf_type}"
-    response = requests.get(url, timeout=10)
+    response = _SESSION.get(url, timeout=10)
     response.raise_for_status()
     return [p["username"] for p in response.json()["users"]]
 
 
 def fetch_games(username: str, max_games: int) -> list[dict]:
+    """Fetch a user's recent rated games as NDJSON, parse to list of dicts.
+
+    Non-streaming on purpose — even 200 games is < 1MB. Streaming makes
+    iter_lines() vulnerable to half-open connections that hang indefinitely
+    (we hit this in production: process at 0% CPU for an hour waiting on a
+    dead socket). A bounded read with a hard read timeout is more robust.
+    """
     url = f"{LICHESS_API}/games/user/{username}"
     params = {
         "max": max_games,
@@ -70,13 +94,14 @@ def fetch_games(username: str, max_games: int) -> list[dict]:
         "perfType": "blitz,rapid,classical",
     }
     headers = {"Accept": "application/x-ndjson"}
-    response = requests.get(
-        url, params=params, headers=headers, stream=True, timeout=60
-    )
+    # (connect, read) timeouts. Read timeout is the max gap between bytes —
+    # set tight so we fail fast on stalled connections.
+    response = _SESSION.get(url, params=params, headers=headers, timeout=(10, 30))
     response.raise_for_status()
 
     games = []
-    for line in response.iter_lines():
+    for line in response.text.splitlines():
+        line = line.strip()
         if line:
             games.append(json.loads(line))
     return games
@@ -123,6 +148,10 @@ def game_to_row(game: dict, target_user: str) -> dict | None:
         "result": result,
         "status": game.get("status"),
         "n_moves": n_moves,
+        # Full SAN move string (space-separated). Adds ~400 bytes per game on
+        # average — fine for the dataset size. Required for Tier-1 move-level
+        # features (castling timing, queen exchanges, early pawn pushes).
+        "moves": moves,
         "opening_eco": opening.get("eco"),
         "opening_name": opening.get("name"),
         "speed": game.get("speed"),
@@ -141,32 +170,52 @@ def _fetch_for_usernames(
     label: str,
     console: Console,
 ) -> tuple[list[dict], list[tuple[str, str]]]:
-    """Fetch games for a list of usernames, with progress bar."""
+    """Fetch games for a list of usernames.
+
+    Emits a plain-text progress line every 10 players so progress is visible
+    when stdout is redirected to a file (Rich's progress bar uses ANSI escapes
+    that don't survive file redirection).
+    """
+    import sys
+
     rows: list[dict] = []
     errors: list[tuple[str, str]] = []
+    total = len(usernames)
+    start = time.monotonic()
 
-    with Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TextColumn("•"),
-        TimeElapsedColumn(),
-        TextColumn("• {task.fields[user]}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task(label, total=len(usernames), user="—")
-        for username in usernames:
-            progress.update(task, user=username)
-            try:
-                games = fetch_games(username, games_per_player)
-                for game in games:
-                    row = game_to_row(game, username)
-                    if row is not None:
-                        rows.append(row)
-            except Exception as exc:  # noqa: BLE001
-                errors.append((username, str(exc)))
-            progress.update(task, advance=1)
-            time.sleep(sleep_between)
+    print(f"[{label}] starting: {total} users", flush=True)
+    sys.stdout.flush()
+
+    for idx, username in enumerate(usernames, start=1):
+        try:
+            games = fetch_games(username, games_per_player)
+            ok_rows = 0
+            for game in games:
+                row = game_to_row(game, username)
+                if row is not None:
+                    rows.append(row)
+                    ok_rows += 1
+        except Exception as exc:  # noqa: BLE001
+            errors.append((username, str(exc)))
+            print(
+                f"[{label}] {idx}/{total} {username} ERROR: {exc}",
+                flush=True,
+            )
+
+        # Heartbeat every 10 users (or always for last user)
+        if idx % 10 == 0 or idx == total:
+            elapsed = time.monotonic() - start
+            rate = idx / elapsed if elapsed > 0 else 0
+            eta = (total - idx) / rate if rate > 0 else 0
+            print(
+                f"[{label}] {idx}/{total} ({rate:.1f} users/s, "
+                f"ETA {eta:.0f}s) — {len(rows)} rows so far, "
+                f"{len(errors)} errors",
+                flush=True,
+            )
+
+        time.sleep(sleep_between)
+
     return rows, errors
 
 
