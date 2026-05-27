@@ -40,8 +40,10 @@ Metadata (kept but not fed to model):
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
+import chess
 import polars as pl
 from rich.console import Console
 
@@ -49,20 +51,144 @@ from rich.console import Console
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 FEATURE_COLUMNS = [
+    # ── Performance (skill-adjusted) ──────────────────────────────────
     "score_residual",
     "white_score_residual",
     "black_score_residual",
+    "long_game_residual",
+    # ── Result mix ────────────────────────────────────────────────────
     "draw_rate",
-    "avg_moves",
-    "opening_diversity",
+    "mate_rate",
     "timeout_rate",
     "resign_rate",
+    # ── Game shape ────────────────────────────────────────────────────
+    "avg_moves",
+    "short_game_rate",
+    # ── Repertoire / opening choice ───────────────────────────────────
+    "opening_diversity",
     "pct_e4_as_white",
     "pct_d4_as_white",
     "pct_sicilian_as_black",
-    "mate_rate",
-    "short_game_rate",
+    # ── Tier 1 move-level (parsed from PGN) ──────────────────────────
+    "avg_castle_move",
+    "pct_queenside_castle",
+    "avg_queens_off_move",
+    "early_pawn_pushes",
 ]
+
+
+def _parse_move_features(moves_str: str) -> dict:
+    """Parse a SAN move string and extract per-side move-level features.
+
+    Returns a dict with eight keys covering castle timing, castle side,
+    queens-off timing, and early pawn pushes — for both colors.
+    Missing/invalid moves yield None values (skipped in aggregation).
+
+    Detection rules:
+        - Castle: token starts with "O-O". Queenside if "O-O-O".
+        - Queens off: chess.popcount(board.queens) == 0 after a move.
+        - Early pawn push: token in first 20 plies whose first char is
+          lowercase (pawn moves like "e4", "exd5"); excludes castles.
+    """
+    out = {
+        "white_castle_ply": None,
+        "black_castle_ply": None,
+        "white_castle_qside": False,
+        "black_castle_qside": False,
+        "queens_off_ply": None,
+        "white_early_pawn": 0,
+        "black_early_pawn": 0,
+    }
+    if not moves_str:
+        return out
+
+    tokens = moves_str.split()
+    board = chess.Board()
+
+    for i, san in enumerate(tokens, start=1):
+        is_white_ply = (i % 2 == 1)
+        first_char = san[0]
+
+        # ── Castle ────────────────────────────────────────────────
+        if san.startswith("O-O"):
+            qside = san.startswith("O-O-O")
+            if is_white_ply and out["white_castle_ply"] is None:
+                out["white_castle_ply"] = i
+                out["white_castle_qside"] = qside
+            elif not is_white_ply and out["black_castle_ply"] is None:
+                out["black_castle_ply"] = i
+                out["black_castle_qside"] = qside
+
+        # ── Early pawn push (in first 20 plies = 10 per side) ────
+        # Pawn SAN starts with a lowercase file letter (a-h).
+        # Castles ("O-O...") are handled above and excluded.
+        elif i <= 20 and first_char.islower():
+            if is_white_ply:
+                out["white_early_pawn"] += 1
+            else:
+                out["black_early_pawn"] += 1
+
+        # ── Push the move so we can check board state ────────────
+        try:
+            move = board.parse_san(san)
+            board.push(move)
+        except (ValueError, AssertionError):
+            # Malformed PGN — bail out, keep what we have so far.
+            break
+
+        # ── Queens-off detection (popcount=0) ────────────────────
+        if out["queens_off_ply"] is None and not board.queens:
+            out["queens_off_ply"] = i
+
+    return out
+
+
+def _add_move_features(games: pl.DataFrame) -> pl.DataFrame:
+    """Enrich games with per-row move-level features.
+
+    Each game (game_id) is parsed once; the resulting per-side features are
+    joined back onto both rows of the game.
+    """
+    # Dedupe by game to parse each game exactly once.
+    unique_games = (
+        games.unique(subset=["game_id"]).select(["game_id", "moves"])
+    )
+    n = unique_games.height
+    print(f"Parsing moves for {n:,} unique games...", flush=True)
+
+    parsed: list[dict] = []
+    start = time.monotonic()
+    last_report = start
+    for idx, (gid, moves) in enumerate(unique_games.iter_rows(), start=1):
+        feats = _parse_move_features(moves)
+        feats["game_id"] = gid
+        parsed.append(feats)
+        if idx % 50_000 == 0:
+            now = time.monotonic()
+            rate = idx / (now - start)
+            eta = (n - idx) / rate if rate > 0 else 0
+            print(
+                f"  {idx:>10,}/{n:,} games  rate {rate:.0f}/s  ETA {eta:.0f}s",
+                flush=True,
+            )
+            last_report = now
+
+    parsed_df = pl.DataFrame(parsed)
+
+    enriched = games.join(parsed_df, on="game_id", how="left")
+    # Pick the player's side of each parsed field.
+    enriched = enriched.with_columns(
+        castle_ply=pl.when(pl.col("color") == "white")
+        .then(pl.col("white_castle_ply"))
+        .otherwise(pl.col("black_castle_ply")),
+        castle_qside=pl.when(pl.col("color") == "white")
+        .then(pl.col("white_castle_qside"))
+        .otherwise(pl.col("black_castle_qside")),
+        early_pawn=pl.when(pl.col("color") == "white")
+        .then(pl.col("white_early_pawn"))
+        .otherwise(pl.col("black_early_pawn")),
+    )
+    return enriched
 
 
 def _annotate_games(games: pl.DataFrame) -> pl.DataFrame:
@@ -94,7 +220,8 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
 
     Players with fewer than `min_games` are dropped — too noisy to cluster on.
     """
-    g = _annotate_games(games)
+    g = _add_move_features(games)
+    g = _annotate_games(g)
 
     is_white = pl.col("color") == "white"
     is_black = pl.col("color") == "black"
@@ -110,6 +237,18 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
     is_black_vs_e4 = is_black & is_e4_opening
     black_vs_e4_n = is_black_vs_e4.sum()
 
+    # Long-game stratification — games >= 80 plies (~40 moves per side).
+    is_long_game = pl.col("n_moves") >= 80
+    long_n = is_long_game.sum()
+
+    # Castled games: castle_ply is not null. Aggregations restrict to these.
+    has_castled = pl.col("castle_ply").is_not_null()
+    castled_n = has_castled.sum()
+
+    # Queens-off games: queens_off_ply not null
+    has_queens_off = pl.col("queens_off_ply").is_not_null()
+    qoff_n = has_queens_off.sum()
+
     features = (
         g.group_by("username")
         .agg(
@@ -122,6 +261,9 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
             .otherwise(None),
             black_score_residual=pl.when(black_n > 0)
             .then(pl.col("score_diff").filter(is_black).mean())
+            .otherwise(None),
+            long_game_residual=pl.when(long_n > 0)
+            .then(pl.col("score_diff").filter(is_long_game).mean())
             .otherwise(None),
             # ── Result mix ────────────────────────────────────────────
             draw_rate=(pl.col("result") == "draw").mean(),
@@ -142,13 +284,23 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
             pct_sicilian_as_black=pl.when(black_vs_e4_n > 0)
             .then((is_black_vs_e4 & is_sicilian).sum() / black_vs_e4_n)
             .otherwise(None),
+            # ── Tier 1 move-level ─────────────────────────────────────
+            avg_castle_move=pl.when(castled_n > 0)
+            .then(pl.col("castle_ply").filter(has_castled).mean())
+            .otherwise(None),
+            pct_queenside_castle=pl.when(castled_n > 0)
+            .then(pl.col("castle_qside").filter(has_castled).cast(pl.Float64).mean())
+            .otherwise(None),
+            avg_queens_off_move=pl.when(qoff_n > 0)
+            .then(pl.col("queens_off_ply").filter(has_queens_off).mean())
+            .otherwise(None),
+            early_pawn_pushes=pl.col("early_pawn").mean(),
         )
         .filter(pl.col("n_games") >= min_games)
         .with_columns(
             pl.col("white_score_residual").fill_null(pl.col("score_residual")),
             pl.col("black_score_residual").fill_null(pl.col("score_residual")),
-            # Players who never played a colour or never faced 1.e4 as Black:
-            # fall back to dataset mean so they don't break clustering.
+            pl.col("long_game_residual").fill_null(pl.col("score_residual")),
             pl.col("pct_e4_as_white").fill_null(
                 pl.col("pct_e4_as_white").mean()
             ),
@@ -157,6 +309,17 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
             ),
             pl.col("pct_sicilian_as_black").fill_null(
                 pl.col("pct_sicilian_as_black").mean()
+            ),
+            # Players who never castled / never had queens come off:
+            # fill with dataset mean so clustering doesn't break.
+            pl.col("avg_castle_move").fill_null(
+                pl.col("avg_castle_move").mean()
+            ),
+            pl.col("pct_queenside_castle").fill_null(
+                pl.col("pct_queenside_castle").mean()
+            ),
+            pl.col("avg_queens_off_move").fill_null(
+                pl.col("avg_queens_off_move").mean()
             ),
         )
         .sort("username")

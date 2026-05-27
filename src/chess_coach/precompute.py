@@ -46,29 +46,29 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 # heatmap (see notebooks/01_data_exploration.ipynb).
 CLUSTER_PROFILES: dict[int, dict[str, str]] = {
     0: {
-        "name": "Blitz brawler",
-        "blurb": "High mate rate, frequent time losses. Plays fast and "
-                 "aggressively, lets the clock decide many games.",
+        "name": "1.e4 amateur",
+        "blurb": "Lower rating band, mostly 1.e4 as White, kingside castle. "
+                 "No strong stylistic extremes — plays the standard lines.",
     },
     1: {
-        "name": "Balanced amateur",
-        "blurb": "Lower rating band, no strong stylistic extremes. "
-                 "Plays the position, doesn't force the game.",
+        "name": "1.d4 positional player",
+        "blurb": "Queen's-pawn devotee — ~46% of White games start 1.d4. "
+                 "Solid, slow-burn positional style.",
     },
     2: {
-        "name": "Sicilian devotee",
-        "blurb": "When facing 1.e4 as Black, plays the Sicilian 90% of the "
-                 "time. Sharp, asymmetrical positions.",
+        "name": "Underrated e4 overperformer",
+        "blurb": "Outperforming Elo by +11 score points per game with classical "
+                 "1.e4 play. Rating likely catching up to actual strength.",
     },
     3: {
-        "name": "Underrated overperformer",
-        "blurb": "Outperforming the Elo expectation by ~12 score points "
-                 "per game. Rating likely catching up to actual strength.",
+        "name": "Queenside king-hunter",
+        "blurb": "Aggressive attacking style: castles queenside half the time, "
+                 "castles late (move 14+), highest mate rate. Goes for the king.",
     },
     4: {
-        "name": "1.d4 specialist",
-        "blurb": "Queen's-pawn player. ~42% of your White games start 1.d4 "
-                 "(vs ~6% for the average player). Solid, positional.",
+        "name": "1.e4 time-pressure player",
+        "blurb": "Classical 1.e4 player who burns the clock — ~29% of games end "
+                 "on time. Lots of mate finishes, decisive style.",
     },
 }
 
