@@ -101,8 +101,7 @@ def build_recommendations(
         def serialise(df: pl.DataFrame) -> list[dict]:
             return [
                 {
-                    "eco": row["opening_eco"],
-                    "name": row["opening_name"],
+                    "name": row["name"],
                     "n": int(row["n"]),
                     "score_residual": float(row["score_residual"]),
                 }
@@ -141,8 +140,8 @@ def main() -> None:
     parser.add_argument(
         "--output", type=Path, default=DATA_DIR / "recommendations.json"
     )
-    parser.add_argument("--top-n", type=int, default=4)
-    parser.add_argument("--min-opening-games", type=int, default=15)
+    parser.add_argument("--top-n", type=int, default=5)
+    parser.add_argument("--min-opening-games", type=int, default=5000)
     args = parser.parse_args()
 
     console = Console()

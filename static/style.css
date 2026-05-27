@@ -260,7 +260,7 @@ button:disabled {
 
 .opening-list li {
   display: grid;
-  grid-template-columns: 28px 56px 1fr auto;
+  grid-template-columns: 28px 1fr auto;
   align-items: baseline;
   gap: 12px;
   padding: 10px 6px;

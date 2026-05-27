@@ -71,8 +71,8 @@ def opening_rankings(
     clustered_players: pl.DataFrame,
     cluster: int,
     color: str,
-    min_games_in_opening: int = 30,
-    top_n: int = 10,
+    min_games_in_opening: int = 1000,
+    top_n: int = 5,
 ) -> pl.DataFrame:
     """Top openings for a (cluster, color), ranked by skill-adjusted score
     (mean of actual - Elo-expected) across all games of cluster members in
@@ -137,6 +137,18 @@ def opening_rankings(
     )
     color_filter = effective_color == color
 
+    # Aggregate by FAMILY (not full opening_name). Sub-variations collapse
+    # into "Sicilian Defense" etc. — readable, and larger sample per row.
+    #
+    # Ranking uses BAYESIAN SHRINKAGE on the score residual:
+    #     shrunk = n / (n + k) * residual
+    # With k=30_000, an opening needs ~30k games before the residual is
+    # weighted at 50%. This penalises obscure openings (Borg, Elephant
+    # Gambit) where strong over-performance is mostly self-selection bias
+    # of the rare players who specialise in them. Mainstream openings
+    # (Italian, Sicilian) with 100k+ samples are barely shrunk.
+    SHRINKAGE_K = 30_000
+
     return (
         games.join(members, on="username", how="inner")
         .filter(
@@ -145,15 +157,21 @@ def opening_rankings(
             & pl.col("opening_name").is_not_null()
             & color_filter
         )
-        .with_columns(score_diff=(actual - expected))
-        .group_by(["opening_eco", "opening_name"])
+        .with_columns(score_diff=(actual - expected), family=family)
+        .group_by("family")
         .agg(
             n=pl.len(),
-            score_residual=pl.col("score_diff").mean(),
+            raw_residual=pl.col("score_diff").mean(),
         )
         .filter(pl.col("n") >= min_games_in_opening)
+        .with_columns(
+            score_residual=pl.col("n") / (pl.col("n") + SHRINKAGE_K)
+            * pl.col("raw_residual")
+        )
         .sort("score_residual", descending=True)
         .head(top_n)
+        .rename({"family": "name"})
+        .select(["name", "n", "score_residual"])
     )
 
 
@@ -180,7 +198,6 @@ def render_recommendations(
 
         table = Table(title=f"Suggested openings as {color}", title_justify="left")
         table.add_column("#", style="bold")
-        table.add_column("ECO")
         table.add_column("Opening")
         table.add_column("Support", justify="right", style="dim")
         if verbose:
@@ -189,9 +206,8 @@ def render_recommendations(
         for rank, row in enumerate(df.iter_rows(named=True), start=1):
             cells = [
                 str(rank),
-                row["opening_eco"],
-                row["opening_name"],
-                f"{row['n']} games",
+                row["name"],
+                f"{row['n']:,} games",
             ]
             if verbose:
                 cells.append(f"{row['score_residual']:+.3f}")
@@ -204,8 +220,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Recommend openings for a Lichess user")
     parser.add_argument("username", help="Lichess username")
     parser.add_argument("--max-games", type=int, default=100)
-    parser.add_argument("--top-n", type=int, default=10)
-    parser.add_argument("--min-opening-games", type=int, default=30)
+    parser.add_argument("--top-n", type=int, default=5)
+    parser.add_argument("--min-opening-games", type=int, default=5000)
     parser.add_argument(
         "--verbose", action="store_true",
         help="Show internal scoring (score residual). Off by default to keep "

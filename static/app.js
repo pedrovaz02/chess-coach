@@ -78,9 +78,8 @@ function renderOpenings(listEl, openings) {
     const li = document.createElement("li");
     li.innerHTML = `
       <span class="rank">${idx + 1}</span>
-      <span class="eco">${op.eco}</span>
       <span class="name">${escapeHtml(op.name)}</span>
-      <span class="sample">${op.n} games</span>
+      <span class="sample">${op.n.toLocaleString()} games</span>
     `;
     listEl.appendChild(li);
   });
