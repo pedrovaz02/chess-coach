@@ -271,7 +271,10 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
             timeout_rate=(pl.col("status") == "outoftime").mean(),
             resign_rate=(pl.col("status") == "resign").mean(),
             # ── Game shape ────────────────────────────────────────────
-            avg_moves=pl.col("n_moves").mean(),
+            # n_moves is the SAN ply count (half-moves). Divide by 2 to give
+            # the chess-standard "full moves per side" interpretation in the
+            # feature value and the cluster summary.
+            avg_moves=pl.col("n_moves").mean() / 2.0,
             short_game_rate=(pl.col("n_moves") < 40).mean(),
             # ── Opening repertoire ────────────────────────────────────
             opening_diversity=pl.col("opening_eco").n_unique() / pl.len(),
