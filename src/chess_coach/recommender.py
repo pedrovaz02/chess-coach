@@ -103,20 +103,38 @@ def opening_rankings(
         .otherwise(0.0)
     )
 
-    # Color classification: lookup in opening DB first, regex as fallback.
+    # Color classification — by FAMILY name (part before first colon).
+    #
+    # Using the full name with sub-variation produces technically-correct but
+    # visually-confusing results: "Italian Game: Two Knights Defense, Max
+    # Lange Attack" classifies as White (Max Lange is White's attack), but the
+    # name reads "Defense" which the user expects in the Black column.
+    #
+    # Family-level rule: "Italian Game" anything → White, "Sicilian Defense"
+    # anything → Black, "Nimzo-Indian Defense" anything → Black, etc. Aligned
+    # with how chess players think about repertoire.
+    #
+    # Cost: White-led sub-variations of Black families (Smith-Morra Gambit,
+    # English Attack vs Najdorf, etc.) move to the Black column. That's the
+    # trade-off for column consistency.
     openings_db = _load_openings()
-    # Build a polars expression: opening_name → "white" | "black" | None
-    # We do this via a Python-side mapping converted to a polars literal lookup.
-    classified_color = (
-        pl.col("opening_name")
-        .replace_strict(openings_db, default=None, return_dtype=pl.String)
-    )
-    # Fallback regex for names not in the DB
+    family = pl.col("opening_name").str.split(":").list.get(0).str.strip_chars()
+
+    # Three-step lookup: family (most general) → full name → regex.
+    # Family alone catches "Italian Game: Two Knights Defense" via "Italian
+    # Game". Full-name catches edge cases where the family root isn't its own
+    # TSV entry (e.g., "King's Gambit Declined" only exists as ":X" variants).
+    by_family = family.replace_strict(openings_db, default=None, return_dtype=pl.String)
+    by_full = pl.col("opening_name").replace_strict(openings_db, default=None, return_dtype=pl.String)
+
     fallback_is_black = pl.col("opening_name").str.contains(_FALLBACK_REGEX)
-    fallback_color = (
-        pl.when(fallback_is_black).then(pl.lit("black")).otherwise(pl.lit("white"))
+    fallback_color = pl.when(fallback_is_black).then(pl.lit("black")).otherwise(pl.lit("white"))
+
+    effective_color = (
+        pl.when(by_family.is_not_null()).then(by_family)
+        .when(by_full.is_not_null()).then(by_full)
+        .otherwise(fallback_color)
     )
-    effective_color = pl.when(classified_color.is_not_null()).then(classified_color).otherwise(fallback_color)
     color_filter = effective_color == color
 
     return (

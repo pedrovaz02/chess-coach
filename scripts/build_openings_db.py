@@ -80,8 +80,12 @@ def main() -> None:
         all_rows.extend(fetch_tsv(fname))
     print(f"Total openings: {len(all_rows):,}\n")
 
+    # Track classification + shortest known PGN length for each name. When
+    # the same name appears with different PGNs (e.g. "Scandinavian Defense"
+    # with 1.e4 d5 AND 1.e4 d5 2.b3), the shorter one is the canonical/root
+    # definition — that's the classification we want.
     classified: dict[str, str] = {}
-    name_conflicts: dict[str, set[str]] = {}
+    shortest_ply: dict[str, int] = {}
     failed = 0
 
     for eco, name, pgn in all_rows:
@@ -89,10 +93,11 @@ def main() -> None:
         if color is None:
             failed += 1
             continue
-        if name in classified and classified[name] != color:
-            name_conflicts.setdefault(name, set()).add(classified[name])
-            name_conflicts[name].add(color)
+        ply_count = sum(1 for t in pgn.split() if "." not in t)
+        if name in classified and ply_count >= shortest_ply[name]:
+            continue  # Existing entry is shorter (more canonical) — keep it
         classified[name] = color
+        shortest_ply[name] = ply_count
 
     n_white = sum(1 for v in classified.values() if v == "white")
     n_black = sum(1 for v in classified.values() if v == "black")
@@ -101,10 +106,6 @@ def main() -> None:
     print(f"  White-led: {n_white:,}")
     print(f"  Black-led: {n_black:,}")
     print(f"  Parse failures: {failed}")
-    if name_conflicts:
-        print(f"  Name conflicts (same name → different color): {len(name_conflicts)}")
-        for n, colors in list(name_conflicts.items())[:5]:
-            print(f"    {n}: {colors}")
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(
