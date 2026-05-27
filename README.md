@@ -46,12 +46,12 @@ collector.py   ---->  data/games.parquet   (~28k games, 284 players)
    |
    v
 features.py    ---->  data/features.parquet  (one row per player)
-                       8 skill-adjusted playstyle features
+                       13 skill-adjusted playstyle features
    |
    v
 cluster.py     ---->  data/models/kmeans.joblib
                       data/players_clustered.parquet
-                       K-Means with K=4
+                       K-Means with K=5
    |
    v
 recommender.py ---->  username -> cluster -> top openings (per color)
@@ -69,6 +69,8 @@ diversity:
 
 Result: 27,757 rated games across 284 players, ratings 784–3014.
 
+![Dataset overview](docs/figures/01_dataset_overview.png)
+
 ### Playstyle features
 
 Computed per player from their games. The key design decision is **skill
@@ -77,31 +79,54 @@ score minus the score Elo predicts given the opponent's rating. A residual of
 `+0.05` means "you over-perform your rating by 5 score points per game on
 average", and it's orthogonal to raw strength.
 
-| Feature                | Meaning                                              |
-| ---                    | ---                                                  |
-| `score_residual`       | Skill-adjusted overall performance                   |
-| `white_score_residual` | Same, restricted to games as White                   |
-| `black_score_residual` | Same, restricted to games as Black                   |
-| `draw_rate`            | Fraction of games drawn                              |
-| `avg_moves`            | Mean ply count (long games = positional grinder)     |
-| `opening_diversity`    | Unique ECO codes / total games (narrow vs broad rep) |
-| `timeout_rate`         | Fraction lost on time (time management)              |
-| `resign_rate`          | Fraction ending in resignation (fighting spirit)     |
+| Feature                 | Meaning                                              |
+| ---                     | ---                                                  |
+| `score_residual`        | Skill-adjusted overall performance                   |
+| `white_score_residual`  | Same, restricted to games as White                   |
+| `black_score_residual`  | Same, restricted to games as Black                   |
+| `draw_rate`             | Fraction of games drawn                              |
+| `avg_moves`             | Mean ply count (long games = positional grinder)     |
+| `opening_diversity`     | Unique ECO codes / total games (narrow vs broad rep) |
+| `timeout_rate`          | Fraction lost on time (time management)              |
+| `resign_rate`           | Fraction ending in resignation (fighting spirit)     |
+| `mate_rate`             | Fraction ending in checkmate (real sharpness)        |
+| `short_game_rate`       | Fraction of games < 40 plies (tactical decisions)    |
+| `pct_e4_as_white`       | As White: fraction starting 1.e4 (ECO B/C)           |
+| `pct_d4_as_white`       | As White: fraction starting 1.d4 (ECO D/E)           |
+| `pct_sicilian_as_black` | As Black vs 1.e4: fraction playing Sicilian          |
 
 ### Clustering
 
-`StandardScaler` then `KMeans`. K=4 chosen from a sweep over K=2..10 by
+`StandardScaler` then `KMeans`. K=5 chosen from a sweep over K=2..10 by
 inspecting the inertia elbow and silhouette score (`uv run python -m
 chess_coach.cluster --evaluate`).
 
-The four clusters that emerged:
+Projected into 2D via PCA, with side-by-side colourings for cluster
+membership and rating — if the clusters were just sorting by rating, the two
+plots would be identical. They aren't, which is the point.
 
-| # | n   | Avg rating | Identity                                                       |
-| - | --- | ---        | ---                                                            |
-| 0 |  47 | 1988       | **Time-pressure players**: 29% timeout rate, short games, narrow rep |
-| 1 |  38 | 2326       | **Under-rated overperformers**: +0.12 score residual            |
-| 2 |  88 | 2241       | **Narrow grinders**: low opening diversity, high resign rate    |
-| 3 | 108 | 2688       | **Elite varied positional**: longest games, broadest repertoire |
+![PCA projection](docs/figures/04_pca.png)
+
+The cluster identities, read from the feature-mean heatmap:
+
+![Cluster characterisation](docs/figures/05_cluster_means.png)
+
+| # |  n  | Avg rating | Identity                                                          |
+| - | --- | ---        | ---                                                               |
+| 0 |  39 | 2008       | **Blitz brawlers**: 29% timeout rate, high mate rate, ~50% 1.e4   |
+| 1 |  26 | 2312       | **Underrated overperformers**: score residual +0.14, 46% Sicilians |
+| 2 |  84 | 2478       | **1.d4 specialists**: 47% d4, only 10% e4                          |
+| 3 |  90 | 2669       | **Elite e4 generalists**: top ratings, 72% e4, longest games       |
+| 4 |  42 | 1966       | **1.e4 dogmatists**: 87% e4, shortest games, low diversity         |
+
+The opening-family preference is the strongest behavioural signal between
+clusters:
+
+![Opening preference by cluster](docs/figures/06_openings_by_cluster.png)
+
+See [`notebooks/01_data_exploration.ipynb`](notebooks/01_data_exploration.ipynb)
+for the full analysis: feature distributions, correlation matrix, and
+discussion of the cluster identities.
 
 ---
 
@@ -109,24 +134,25 @@ The four clusters that emerged:
 
 Be honest about what this does and doesn't do.
 
-- **Silhouette score is ~0.16**, meaning the clusters are not crisply
+- **Silhouette score is ~0.13**, meaning the clusters are not crisply
   separated. This is most likely because chess playstyle is a continuum, not
   a discrete partition — K-Means imposes hard boundaries on a smooth cloud.
   The clusters are still interpretable, but a different algorithm (Gaussian
   mixture, hierarchical, or even a continuous embedding) might fit the data
   better.
-- **Win rates in the output are not predictions for you.** They're the
-  aggregate win rate of *all players in the target cluster* in that opening.
-  A 1300-rated player projected into a cluster of 2300s won't suddenly score
-  85% with the London System. The signal is "this opening tends to suit this
-  playstyle", not "expect this win rate".
+- **Recommendations are not personal win-rate predictions.** The ranking
+  reflects how well *cluster members* have done with each opening, against
+  cluster-member-level opposition. A 1300-rated player projected into a
+  cluster of 2300s won't suddenly score 85% with the London System. The
+  signal is "this opening tends to suit this playstyle", not "expect this
+  win rate".
 - **Top-heavy training distribution.** Even with Stage-2 sampling, only ~22
-  of 284 players are below 1800. Recommendations for low-rated users rely on
+  of 281 players are below 1800. Recommendations for low-rated users rely on
   style match, not direct examples.
 - **No engine analysis yet.** Features are surface-level (results, move
-  counts, statuses). Things like average centipawn loss, sacrifice frequency,
-  or tactical pattern usage would require Stockfish and are not in scope for
-  Phase 1.
+  counts, statuses, opening-family proportions). Things like average
+  centipawn loss, sacrifice frequency, or tactical pattern usage would
+  require Stockfish and are not in scope for Phase 1.
 
 ---
 
@@ -149,7 +175,7 @@ uv run python -m chess_coach.features
 uv run python -m chess_coach.cluster --evaluate
 
 # Train final model
-uv run python -m chess_coach.cluster --k 4
+uv run python -m chess_coach.cluster --k 5
 
 # Recommend for any Lichess user
 uv run python -m chess_coach.recommender <lichess_username>
@@ -167,8 +193,10 @@ chess-coach/
 |   |-- cluster.py          K-Means with elbow + silhouette tooling
 |   |-- recommender.py      End-to-end pipeline for a single user
 |   `-- hello_lichess.py    Sanity check that the API is reachable
+|-- notebooks/
+|   `-- 01_data_exploration.ipynb   EDA + cluster visualisation
+|-- docs/figures/           PNGs referenced from this README
 |-- data/                   (gitignored) parquet files + trained model
-|-- notebooks/              (planned) EDA + cluster visualisation
 |-- tests/                  (planned)
 `-- pyproject.toml
 ```
@@ -177,16 +205,18 @@ chess-coach/
 
 ## Roadmap
 
-- **Phase 1** (this) — end-to-end recommender, local CLI. **Done.**
-- **Phase 2** — FastAPI + minimal frontend, deploy to a free tier.
+- **Phase 1** (this) — end-to-end recommender, local CLI, EDA notebook. **Done.**
+- **Phase 2** — FastAPI + minimal frontend, deploy to a free tier so anyone
+  can paste their Lichess username and get recommendations.
 - **Phase 3** — Stockfish-derived features (centipawn loss, tactical density)
   and a serious comparison with rule-based baselines.
 - **Phase 4** — train on a monthly Lichess database dump (~90M games) so
-  recommendations are based on millions of similar players, not 284.
+  recommendations are based on millions of similar players, not 281.
 
 ---
 
 ## Stack
 
-`uv` · `polars` · `pandas` · `requests` · `scikit-learn` · `joblib` ·
-`matplotlib` · `seaborn` · `rich` · `python-chess` (planned for Phase 3)
+`uv` · `polars` · `pandas` · `pyarrow` · `requests` · `scikit-learn` ·
+`joblib` · `matplotlib` · `seaborn` · `rich` · `jupyter` · `python-chess`
+(planned for Phase 3)
