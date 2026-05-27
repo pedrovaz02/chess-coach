@@ -46,29 +46,30 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 # heatmap (see notebooks/01_data_exploration.ipynb).
 CLUSTER_PROFILES: dict[int, dict[str, str]] = {
     0: {
-        "name": "1.e4 amateur",
-        "blurb": "Lower rating band, mostly 1.e4 as White, kingside castle. "
-                 "No strong stylistic extremes — plays the standard lines.",
+        "name": "Quick 1.e4 amateur",
+        "blurb": "Plays 1.e4 84% of the time, decides games fast — 30% finish "
+                 "before move 20 per side. Tactical short games dominate.",
     },
     1: {
-        "name": "1.d4 positional player",
-        "blurb": "Queen's-pawn devotee — ~46% of White games start 1.d4. "
-                 "Solid, slow-burn positional style.",
+        "name": "Underrated 1.e4 overperformer",
+        "blurb": "Outperforming Elo by +0.11 score per game (and +0.15 in long "
+                 "games). Classical 1.e4 player whose rating hasn't caught up.",
     },
     2: {
-        "name": "Underrated e4 overperformer",
-        "blurb": "Outperforming Elo by +11 score points per game with classical "
-                 "1.e4 play. Rating likely catching up to actual strength.",
+        "name": "1.e4 grinder",
+        "blurb": "Higher-rated 1.e4 specialist (~1790). Longest games in the "
+                 "dataset (75 moves avg), Sicilian defender as Black.",
     },
     3: {
         "name": "Queenside king-hunter",
-        "blurb": "Aggressive attacking style: castles queenside half the time, "
-                 "castles late (move 14+), highest mate rate. Goes for the king.",
+        "blurb": "Aggressive attacking style: 41% queenside castles, castles "
+                 "late (avg move 14), 38% mate rate — the highest. Goes for "
+                 "the king.",
     },
     4: {
-        "name": "1.e4 time-pressure player",
-        "blurb": "Classical 1.e4 player who burns the clock — ~29% of games end "
-                 "on time. Lots of mate finishes, decisive style.",
+        "name": "1.d4 specialist",
+        "blurb": "Closed-position devotee. Only 6% 1.e4 — almost exclusively "
+                 "plays 1.d4 (48%) as White. Solid, positional style.",
     },
 }
 
