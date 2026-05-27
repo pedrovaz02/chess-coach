@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fastapi>=0.136.3",
     "matplotlib>=3.10.9",
     "pandas>=3.0.3",
     "polars>=1.41.0",
@@ -14,6 +15,7 @@ dependencies = [
     "rich>=15.0.0",
     "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
+    "uvicorn>=0.48.0",
 ]
 
 [project.scripts]

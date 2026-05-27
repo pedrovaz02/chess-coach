@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "chess-coach",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "uvicorn", "chess_coach.api:app", "--port", "8000", "--host", "127.0.0.1"],
+      "port": 8000
+    }
+  ]
+}

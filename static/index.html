@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Coach — opening recommender</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Chess Coach</h1>
+      <p class="tagline">
+        Opening recommendations based on the playstyle of similar Lichess players.
+        Type your Lichess username and we&rsquo;ll match you to one of five
+        style clusters.
+      </p>
+    </header>
+
+    <form id="lookup-form" autocomplete="off">
+      <label for="username">Lichess username</label>
+      <div class="input-row">
+        <input
+          id="username"
+          name="username"
+          type="text"
+          required
+          placeholder="e.g. pedrovaz02"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button type="submit" id="submit-btn">Recommend</button>
+      </div>
+      <p class="hint">We&rsquo;ll fetch your last 100 rated games (takes 5&ndash;10 seconds).</p>
+    </form>
+
+    <section id="status" class="hidden" aria-live="polite"></section>
+
+    <section id="results" class="hidden">
+      <article id="cluster-card">
+        <div class="cluster-header">
+          <span class="cluster-id" id="cluster-id"></span>
+          <h2 id="cluster-name"></h2>
+        </div>
+        <p class="blurb" id="cluster-blurb"></p>
+        <dl class="cluster-stats">
+          <div><dt>Your rating</dt><dd id="user-rating"></dd></div>
+          <div><dt>Cluster avg rating</dt><dd id="cluster-rating"></dd></div>
+          <div><dt>Cluster size</dt><dd id="cluster-size"></dd></div>
+          <div><dt>Games analysed</dt><dd id="n-games"></dd></div>
+        </dl>
+      </article>
+
+      <div class="openings-grid">
+        <article class="openings-card">
+          <h3>Suggested openings as <span class="color white-tag">White</span></h3>
+          <ol id="white-openings" class="opening-list"></ol>
+        </article>
+
+        <article class="openings-card">
+          <h3>Suggested openings as <span class="color black-tag">Black</span></h3>
+          <ol id="black-openings" class="opening-list"></ol>
+        </article>
+      </div>
+
+      <details id="why-match">
+        <summary>Why this match? &mdash; your features vs. the cluster average</summary>
+        <table id="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>You</th>
+              <th>Cluster mean</th>
+              <th>&Delta;</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </details>
+    </section>
+
+    <footer>
+      <p>
+        Built as a portfolio project &middot;
+        <a href="https://github.com/pedrovaz02/chess-coach" target="_blank" rel="noopener">source on GitHub</a>
+      </p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
