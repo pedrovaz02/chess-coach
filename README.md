@@ -178,6 +178,16 @@ live in `precompute.py:CLUSTER_PROFILES`. If you retrain with a different
 K, those need re-labelling (`cluster.py --k <N>` then inspect the cluster
 summary heatmap).
 
+The feature-mean heatmap each identity is read from (colour = z-score
+across clusters, annotation = raw mean):
+
+![Cluster characterisation](docs/figures/05_cluster_means.png)
+
+Opening-family preference is the single strongest behavioural signal —
+e.g. cluster 4 is almost pure 1.d4, cluster 0 almost pure 1.e4:
+
+![Opening preference by cluster](docs/figures/06_openings_by_cluster.png)
+
 ### Recommendation
 
 Once a user is projected into a cluster, the recommender pulls the top
@@ -231,6 +241,17 @@ Each `(cluster, color)` ranking goes through three filters:
   Only the rare players who study Borg Defense play it, and they study it
   deeply, so they over-perform. Bayesian shrinkage corrects for this so the
   recommendations end up grounded in mainstream openings.
+
+- **Accuracy carries style signal beyond rating (Phase 3).** Parsing the
+  `[%eval]` annotations Lichess embeds in ~12% of games gives a per-player
+  average centipawn loss (ACPL). Globally ACPL tracks rating (corr −0.55),
+  but holding rating fixed (~1428), the clusters still differ by ~16 cp/move
+  — the Queenside king-hunter is the least accurate (trades precision for
+  attack), the Underrated overperformer the most. Accuracy was never a
+  clustering input, yet it separates the clusters as the identities predict.
+  See [`DECISIONS.md` § 8](DECISIONS.md#8-phase-3--accuracy-from-eval-annotations).
+
+![Accuracy by cluster](docs/figures/07_acpl_by_cluster.png)
 
 ---
 

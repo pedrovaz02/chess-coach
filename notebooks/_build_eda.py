@@ -26,7 +26,7 @@ nb.cells = [
     md(
         "# Chess Coach — Exploratory Data Analysis\n"
         "\n"
-        "Walks through the player dataset, the 13-dimensional playstyle feature space, and the K-Means clusters built on it.\n"
+        "Walks through the player dataset, the 18-dimensional playstyle feature space, and the K-Means clusters built on it.\n"
         "\n"
         "All figures are saved to `docs/figures/` so they can be referenced from the README."
     ),
@@ -131,7 +131,7 @@ nb.cells = [
     md(
         "## 4. PCA projection\n"
         "\n"
-        "13-dimensional feature space projected to 2D for visualisation. Each point is a player, coloured first by K-Means cluster (left), then by rating (right) — to see whether the clusters are tracking style or just rating."
+        "18-dimensional feature space projected to 2D for visualisation. Each point is a player, coloured first by K-Means cluster (left), then by rating (right) — to see whether the clusters are tracking style or just rating."
     ),
     code(
         "X = clustered.select(FEATURE_COLUMNS).to_numpy()\n"
@@ -221,25 +221,74 @@ nb.cells = [
     md(
         "## Cluster identities\n"
         "\n"
-        "Reading the heatmap above and the opening bar chart:\n"
+        "Reading the heatmap above and the opening bar chart (K=5 on 154,510 players):\n"
         "\n"
         "| Cluster | Avg rating | Identity |\n"
         "| --- | --- | --- |\n"
-        "| **0** | ~2000 | Blitz brawlers — ~29% time-loss, low draws, ~50% 1.e4 |\n"
-        "| **1** | ~2310 | Underrated overperformers — score residual +0.14, ~46% Sicilians as Black |\n"
-        "| **2** | ~2480 | 1.d4 specialists — 47% d4, only 10% e4 |\n"
-        "| **3** | ~2670 | Elite e4 generalists — top ratings, 72% e4, longest games |\n"
-        "| **4** | ~1965 | 1.e4 dogmatists — 87% e4, short decisive games |\n"
+        "| **0** | ~1431 | Quick 1.e4 amateur — 84% e4, decides games fast (~29 moves) |\n"
+        "| **1** | ~1540 | Underrated 1.e4 overperformer — score residual +0.11, +0.15 in long games |\n"
+        "| **2** | ~1789 | 1.e4 grinder — higher-rated, longest games (~38 moves) |\n"
+        "| **3** | ~1415 | Queenside king-hunter — 41% O-O-O, castles late, 38% mate rate |\n"
+        "| **4** | ~1740 | 1.d4 specialist — only 6% e4 vs 48% d4 |\n"
         "\n"
-        "Each identity emerges from a *combination* of features. Cluster 4 and Cluster 0 are both ~2000-rated and play 1.e4, but Cluster 0 burns the clock and Cluster 4 has the shortest games. K-Means is picking up these multi-feature signatures."
+        "Each identity emerges from a *combination* of features. The Queenside king-hunter (C3) only became visible once castle-side and castle-timing features entered the vector — outcome features alone couldn't see it."
+    ),
+    md(
+        "## Phase 3 — does accuracy carry style signal beyond rating?\n"
+        "\n"
+        "~12% of Lichess games carry `[%eval]` computer-analysis annotations. We parse them into per-player **ACPL** (average centipawn loss) and **blunder rate** — kept as metadata, not clustering features. The question: do the clusters differ in accuracy *independently of rating*?"
+    ),
+    code(
+        "analyzed = clustered.filter(pl.col('n_analyzed_games') >= 3)\n"
+        "\n"
+        "overall = (analyzed.group_by('cluster')\n"
+        "           .agg(acpl=pl.col('acpl').mean(), rating=pl.col('avg_rating').mean(), n=pl.len())\n"
+        "           .sort('cluster').to_pandas())\n"
+        "\n"
+        "band = analyzed.filter((pl.col('avg_rating') >= 1350) & (pl.col('avg_rating') <= 1500))\n"
+        "banded = (band.group_by('cluster')\n"
+        "          .agg(acpl=pl.col('acpl').mean(), n=pl.len())\n"
+        "          .sort('cluster').to_pandas())\n"
+        "\n"
+        "fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))\n"
+        "\n"
+        "ax = axes[0]\n"
+        "ax.bar([f'C{c}' for c in overall['cluster']], overall['acpl'], color='#6a7d4f', edgecolor='white')\n"
+        "ax.set(ylabel='Mean ACPL (centipawns)', title='Accuracy by cluster (all ratings)')\n"
+        "for i, (a, r) in enumerate(zip(overall['acpl'], overall['rating'])):\n"
+        "    ax.text(i, a + 0.5, f'{a:.0f}\\n({r:.0f})', ha='center', fontsize=8)\n"
+        "\n"
+        "ax = axes[1]\n"
+        "ax.bar([f'C{c}' for c in banded['cluster']], banded['acpl'], color='#b3793f', edgecolor='white')\n"
+        "ax.set(ylabel='Mean ACPL (centipawns)', title='Accuracy by cluster - rating band 1350-1500')\n"
+        "for i, a in enumerate(banded['acpl']):\n"
+        "    ax.text(i, a + 0.5, f'{a:.0f}', ha='center', fontsize=9)\n"
+        "\n"
+        "fig.tight_layout()\n"
+        "fig.savefig(FIG_DIR / '07_acpl_by_cluster.png', bbox_inches='tight')\n"
+        "plt.show()\n"
+        "\n"
+        "corr = analyzed.select(pl.corr('acpl', 'avg_rating')).item()\n"
+        "print(f'ACPL-rating correlation: {corr:.3f}')\n"
+    ),
+    md(
+        "**Reading the two panels.** Left: ACPL drops as rating rises (global "
+        "ACPL-rating correlation ~ -0.55 — accuracy *is* a large part of strength). "
+        "Right: holding rating fixed (~1428), the clusters **still** differ by "
+        "~16 cp/move. The Queenside king-hunter is the least accurate at any given "
+        "rating — it trades precision for attacking chances — while the Underrated "
+        "overperformer is the most accurate, consistent with its +0.11 score "
+        "residual. Accuracy was never an input to the clustering, yet it separates "
+        "the clusters exactly as the identities predict: the strongest evidence that "
+        "the model captures **style**, not just rating."
     ),
     md(
         "## Limitations & next steps\n"
         "\n"
-        "- **Silhouette ~0.13**, meaning clusters are not crisply separated. Likely because chess playstyle is a continuum rather than a discrete partition. Could try Gaussian Mixture Models or continuous embeddings.\n"
-        "- **`pct_e4_as_white` ↔ `pct_d4_as_white` correlation near -1** — could drop one feature without information loss; kept for downstream interpretability.\n"
-        "- **No move-level features** — adding centipawn loss, tactical pattern density, or piece activity (all needing Stockfish) is Phase 3.\n"
-        "- **Underrepresented rating bands** — only 22 of 281 players are < 1800. Phase 4 (training on monthly Lichess database dumps) addresses this."
+        "- **Silhouette ~0.08** across 281 → 5k → 154k players and 8 → 18 features. The metric won't move with scale or features — chess playstyle is most likely a continuum, not a discrete partition. K-Means imposes hard borders on a smooth cloud. A Gaussian-mixture model or continuous embedding would likely fit better.\n"
+        "- **`pct_e4_as_white` ↔ `pct_d4_as_white` correlation near -1** — could drop one feature without information loss; kept for interpretability.\n"
+        "- **Accuracy can't be a live feature** — the recommender fetches a user's games from the REST API, which has no evals. ACPL stays a characterisation overlay.\n"
+        "- **Single-month training window** — Phase 4 (12 months of dumps) would smooth seasonal/meta shifts."
     ),
 ]
 
