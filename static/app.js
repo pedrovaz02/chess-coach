@@ -125,3 +125,107 @@ function escapeHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
   );
 }
+
+/* ── Tab switching ─────────────────────────────────────────────────── */
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    const target = tab.dataset.tab;
+    document.getElementById("panel-recommend").classList.toggle("hidden", target !== "recommend");
+    document.getElementById("panel-versus").classList.toggle("hidden", target !== "versus");
+  });
+});
+
+/* ── Versus: compare two players ───────────────────────────────────── */
+
+const vsForm = document.getElementById("versus-form");
+const vsBtn = document.getElementById("vs-btn");
+const vsStatus = document.getElementById("vs-status");
+const vsResults = document.getElementById("vs-results");
+
+vsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const a = document.getElementById("vs-a").value.trim();
+  const b = document.getElementById("vs-b").value.trim();
+  if (!a || !b) return;
+
+  vsBtn.disabled = true;
+  vsBtn.textContent = "Fetching…";
+  vsResults.classList.add("hidden");
+  vsShowStatus(`Fetching games for ${a} and ${b}… this takes 10–20 seconds.`, "loading");
+
+  try {
+    const res = await fetch(`/versus/${encodeURIComponent(a)}/${encodeURIComponent(b)}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Server responded ${res.status}`);
+    }
+    renderVersus(await res.json());
+    vsShowStatus(null);
+    vsResults.classList.remove("hidden");
+  } catch (err) {
+    vsShowStatus(err.message || String(err), "error");
+  } finally {
+    vsBtn.disabled = false;
+    vsBtn.textContent = "Compare";
+  }
+});
+
+function vsShowStatus(message, kind) {
+  if (!message) { vsStatus.classList.add("hidden"); vsStatus.textContent = ""; return; }
+  vsStatus.classList.remove("hidden", "loading", "error");
+  if (kind) vsStatus.classList.add(kind);
+  vsStatus.textContent = message;
+}
+
+function renderVersus(d) {
+  const a = d.player_a, b = d.player_b;
+
+  document.getElementById("vs-a-id").textContent = `C${a.cluster.id}`;
+  document.getElementById("vs-a-name").textContent = `${a.username} (${Math.round(a.rating)}) — ${a.cluster.name}`;
+  document.getElementById("vs-a-cluster").textContent = a.cluster.blurb;
+  document.getElementById("vs-b-id").textContent = `C${b.cluster.id}`;
+  document.getElementById("vs-b-name").textContent = `${b.username} (${Math.round(b.rating)}) — ${b.cluster.name}`;
+  document.getElementById("vs-b-cluster").textContent = b.cluster.blurb;
+
+  renderMatchup("vs-match1-title", "vs-match1",
+    `${a.username} (White) vs ${b.username} (Black)`, d.matchups.a_white_b_black);
+  renderMatchup("vs-match2-title", "vs-match2",
+    `${b.username} (White) vs ${a.username} (Black)`, d.matchups.b_white_a_black);
+
+  // Feature comparison table
+  document.getElementById("vs-th-a").textContent = a.username;
+  document.getElementById("vs-th-b").textContent = b.username;
+  const tbody = document.querySelector("#vs-table tbody");
+  tbody.innerHTML = "";
+  d.feature_comparison.forEach((row) => {
+    const tr = document.createElement("tr");
+    const dCls = row.delta > 0.001 ? "delta-pos" : row.delta < -0.001 ? "delta-neg" : "";
+    tr.innerHTML = `
+      <td>${row.feature}</td>
+      <td>${fmt(row.a)}</td>
+      <td>${fmt(row.b)}</td>
+      <td class="${dCls}">${row.delta > 0 ? "+" : ""}${fmt(row.delta)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderMatchup(titleId, listId, title, openings) {
+  document.getElementById(titleId).textContent = title;
+  const listEl = document.getElementById(listId);
+  listEl.innerHTML = "";
+  if (!openings || !openings.length) {
+    listEl.innerHTML = `<li><span class="empty">no shared opening data</span></li>`;
+    return;
+  }
+  openings.forEach((op) => {
+    const li = document.createElement("li");
+    const mark = op.both_positive ? ' <span class="mutual">✓ both</span>' : "";
+    li.innerHTML = `
+      <span class="name">${escapeHtml(op.family)}${mark}</span>
+      <span class="sample">${op.white_rel >= 0 ? "+" : ""}${op.white_rel.toFixed(3)} / ${op.black_rel >= 0 ? "+" : ""}${op.black_rel.toFixed(3)}</span>`;
+    listEl.appendChild(li);
+  });
+}

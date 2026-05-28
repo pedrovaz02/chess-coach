@@ -132,6 +132,27 @@ def recommend(username: str, max_games: int = 100) -> JSONResponse:
     })
 
 
+@app.get("/versus/{player_a}/{player_b}")
+def versus(player_a: str, player_b: str) -> JSONResponse:
+    """Compare two players' styles and surface openings that suit both."""
+    from chess_coach import versus as versus_mod
+
+    def profile(name: str) -> dict:
+        try:
+            return versus_mod._profile(name, state.scaler, state.kmeans, state.recommendations)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except requests.HTTPError as exc:
+            code = exc.response.status_code if exc.response is not None else 502
+            raise HTTPException(status_code=code, detail=f"Lichess error for '{name}'") from exc
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"Network error: {exc}") from exc
+
+    a = profile(player_a)
+    b = profile(player_b)
+    return JSONResponse(versus_mod.build_versus_payload(a, b))
+
+
 # Mount static last so the API routes above take precedence.
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

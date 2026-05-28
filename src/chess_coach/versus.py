@@ -90,6 +90,47 @@ def mutual_openings(white_cluster: dict, black_cluster: dict, top_n: int = 6) ->
     return rows[:top_n]
 
 
+def build_versus_payload(a: dict, b: dict) -> dict:
+    """JSON-serialisable comparison of two profiled players (for the API)."""
+    fa, fb = a["features"], b["features"]
+    feature_comparison = sorted(
+        (
+            {
+                "feature": c,
+                "a": float(fa[c]),
+                "b": float(fb[c]),
+                "delta": float(fa[c]) - float(fb[c]),
+            }
+            for c in FEATURE_COLUMNS
+        ),
+        key=lambda r: abs(r["delta"]),
+        reverse=True,
+    )
+
+    def cluster_brief(p: dict) -> dict:
+        return {
+            "id": p["cluster"]["id"],
+            "name": p["cluster"]["name"],
+            "blurb": p["cluster"]["blurb"],
+        }
+
+    return {
+        "player_a": {
+            "username": a["username"], "rating": a["rating"],
+            "n_games": int(a["n_games"]), "cluster": cluster_brief(a),
+        },
+        "player_b": {
+            "username": b["username"], "rating": b["rating"],
+            "n_games": int(b["n_games"]), "cluster": cluster_brief(b),
+        },
+        "feature_comparison": feature_comparison,
+        "matchups": {
+            "a_white_b_black": mutual_openings(a["cluster"], b["cluster"]),
+            "b_white_a_black": mutual_openings(b["cluster"], a["cluster"]),
+        },
+    }
+
+
 def render(console: Console, a: dict, b: dict, recs: dict) -> None:
     # ── Cluster headline ────────────────────────────────────────────────
     console.print(

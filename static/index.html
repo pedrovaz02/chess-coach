@@ -12,11 +12,18 @@
       <h1>Chess Coach</h1>
       <p class="tagline">
         Opening recommendations based on the playstyle of similar Lichess players.
-        Type your Lichess username and we&rsquo;ll match you to one of five
-        style clusters.
+        Match a player to one of five style clusters — or compare two players
+        and find openings that suit them both.
       </p>
     </header>
 
+    <nav class="tabs">
+      <button class="tab active" data-tab="recommend">Recommend</button>
+      <button class="tab" data-tab="versus">Compare two players</button>
+    </nav>
+
+    <!-- ── Recommend panel ───────────────────────────────────────── -->
+    <section id="panel-recommend" class="panel">
     <form id="lookup-form" autocomplete="off">
       <label for="username">Lichess username</label>
       <div class="input-row">
@@ -79,6 +86,55 @@
         </table>
       </details>
     </section>
+    </section><!-- /panel-recommend -->
+
+    <!-- ── Versus panel ──────────────────────────────────────────── -->
+    <section id="panel-versus" class="panel hidden">
+      <form id="versus-form" autocomplete="off">
+        <div class="input-row">
+          <input id="vs-a" type="text" required placeholder="player 1, e.g. pedrovaz02"
+                 autocomplete="off" spellcheck="false">
+          <span class="vs-sep">vs</span>
+          <input id="vs-b" type="text" required placeholder="player 2, e.g. Pinhasz"
+                 autocomplete="off" spellcheck="false">
+          <button type="submit" id="vs-btn">Compare</button>
+        </div>
+        <p class="hint">Fetches both players&rsquo; last 100 games (takes 10&ndash;20 seconds).</p>
+      </form>
+
+      <section id="vs-status" class="hidden" aria-live="polite"></section>
+
+      <section id="vs-results" class="hidden">
+        <div class="vs-headline">
+          <article class="vs-player"><span class="cluster-id" id="vs-a-id"></span>
+            <h3 id="vs-a-name"></h3><p class="blurb" id="vs-a-cluster"></p></article>
+          <span class="vs-x">vs</span>
+          <article class="vs-player"><span class="cluster-id" id="vs-b-id"></span>
+            <h3 id="vs-b-name"></h3><p class="blurb" id="vs-b-cluster"></p></article>
+        </div>
+
+        <div class="openings-grid">
+          <article class="openings-card">
+            <h3 id="vs-match1-title"></h3>
+            <ol id="vs-match1" class="opening-list"></ol>
+          </article>
+          <article class="openings-card">
+            <h3 id="vs-match2-title"></h3>
+            <ol id="vs-match2" class="opening-list"></ol>
+          </article>
+        </div>
+
+        <details id="vs-why">
+          <summary>Playstyle comparison &mdash; largest differences first</summary>
+          <table id="vs-table">
+            <thead>
+              <tr><th>Feature</th><th id="vs-th-a">A</th><th id="vs-th-b">B</th><th>&Delta;</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </details>
+      </section>
+    </section><!-- /panel-versus -->
 
     <footer>
       <p>

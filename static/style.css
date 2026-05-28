@@ -137,6 +137,88 @@ button:disabled {
 
 .hidden { display: none; }
 
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 16px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--text); background: none; }
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Versus ───────────────────────────────────────────────────────────── */
+
+.vs-sep {
+  align-self: center;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.vs-headline {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 14px;
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+
+.vs-player h3 {
+  margin: 8px 0 6px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.vs-x {
+  align-self: center;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.mutual {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* Versus matchup lists are 2-column (name + relative-strength), no rank */
+#vs-match1 li,
+#vs-match2 li {
+  grid-template-columns: 1fr auto;
+}
+
+@media (max-width: 640px) {
+  .vs-headline { grid-template-columns: 1fr; }
+  .vs-x { justify-self: start; }
+}
+
 /* ── Cluster card ─────────────────────────────────────────────────────── */
 
 #results { margin-top: 32px; }
