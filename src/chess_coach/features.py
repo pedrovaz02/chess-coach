@@ -249,11 +249,30 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
     has_queens_off = pl.col("queens_off_ply").is_not_null()
     qoff_n = has_queens_off.sum()
 
+    # Analysed games: have [%eval] → acpl/blunders populated. Only ~12% of
+    # games. Accuracy is computed as weighted aggregates over a player's
+    # analysed games and kept as METADATA (not a clustering feature), since
+    # most players have no analysed games and live users never do.
+    is_analyzed = pl.col("has_eval").fill_null(False)
+    analyzed_n = is_analyzed.sum()
+    eval_moves_total = pl.col("n_eval_moves").filter(is_analyzed).sum()
+
     features = (
         g.group_by("username")
         .agg(
             n_games=pl.len(),
             avg_rating=pl.col("user_rating").mean(),
+            # ── Accuracy metadata (from [%eval], analysed games only) ──
+            n_analyzed_games=analyzed_n,
+            acpl=pl.when(analyzed_n > 0)
+            .then(
+                (pl.col("acpl") * pl.col("n_eval_moves")).filter(is_analyzed).sum()
+                / eval_moves_total
+            )
+            .otherwise(None),
+            blunder_rate=pl.when(analyzed_n > 0)
+            .then(pl.col("blunders").filter(is_analyzed).sum() / eval_moves_total)
+            .otherwise(None),
             # ── Performance ───────────────────────────────────────────
             score_residual=pl.col("score_diff").mean(),
             white_score_residual=pl.when(white_n > 0)
