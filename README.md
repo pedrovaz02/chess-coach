@@ -1,3 +1,15 @@
+---
+title: Chess Coach
+emoji: ♟️
+colorFrom: indigo
+colorTo: gray
+sdk: docker
+app_port: 8000
+pinned: false
+license: mit
+short_description: Lichess opening recommender via playstyle clustering
+---
+
 # Chess Coach
 
 Opening recommender that matches a Lichess player to a stylistic cluster of

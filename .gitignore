@@ -13,6 +13,12 @@ build/
 # Dados (NUNCA fazer commit de dados grandes)
 data/*
 !data/.gitkeep
+# Artefactos pequenos necessários ao inference (deploy)
+!data/recommendations.json
+!data/models/
+data/models/*
+!data/models/kmeans.joblib
+!data/models/scaler.joblib
 
 # IDE
 .vscode/

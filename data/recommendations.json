@@ -1,0 +1,440 @@
+{
+  "k": 5,
+  "feature_columns": [
+    "score_residual",
+    "white_score_residual",
+    "black_score_residual",
+    "long_game_residual",
+    "draw_rate",
+    "mate_rate",
+    "timeout_rate",
+    "resign_rate",
+    "avg_moves",
+    "short_game_rate",
+    "opening_diversity",
+    "pct_e4_as_white",
+    "pct_d4_as_white",
+    "pct_sicilian_as_black",
+    "avg_castle_move",
+    "pct_queenside_castle",
+    "avg_queens_off_move",
+    "early_pawn_pushes"
+  ],
+  "clusters": [
+    {
+      "id": 0,
+      "name": "Quick 1.e4 amateur",
+      "blurb": "Plays 1.e4 84% of the time, decides games fast \u2014 30% finish before move 20 per side. Tactical short games dominate.",
+      "size": 28956,
+      "avg_rating": 1430.7681898250125,
+      "feature_means": {
+        "score_residual": -0.05265174832145635,
+        "white_score_residual": -0.029424252989072162,
+        "black_score_residual": -0.07588895893205057,
+        "long_game_residual": -0.010073333399287955,
+        "draw_rate": 0.0288665857137443,
+        "mate_rate": 0.23369009154188636,
+        "timeout_rate": 0.1364870945078109,
+        "resign_rate": 0.6033925887533845,
+        "avg_moves": 28.859651962985506,
+        "short_game_rate": 0.3043453638317869,
+        "opening_diversity": 0.544858700541565,
+        "pct_e4_as_white": 0.8372498970943164,
+        "pct_d4_as_white": 0.05703494121730839,
+        "pct_sicilian_as_black": 0.09288637601508118,
+        "avg_castle_move": 20.006010026125445,
+        "pct_queenside_castle": 0.1865453347149099,
+        "avg_queens_off_move": 38.377137541830535,
+        "early_pawn_pushes": 3.8714611912204497
+      },
+      "top_openings": {
+        "white": [
+          {
+            "name": "Scotch Game",
+            "n": 24629,
+            "score_residual": 0.005267608158293923
+          },
+          {
+            "name": "Vienna Game",
+            "n": 11231,
+            "score_residual": 0.0022375324920607385
+          },
+          {
+            "name": "Bishop's Opening",
+            "n": 16567,
+            "score_residual": -0.0010050134814645127
+          },
+          {
+            "name": "Center Game",
+            "n": 6418,
+            "score_residual": -0.0010477149832515968
+          },
+          {
+            "name": "Ruy Lopez",
+            "n": 15942,
+            "score_residual": -0.0021861770587150308
+          }
+        ],
+        "black": [
+          {
+            "name": "Englund Gambit",
+            "n": 12154,
+            "score_residual": -0.010787334684165198
+          },
+          {
+            "name": "Nimzowitsch Defense",
+            "n": 6654,
+            "score_residual": -0.011704643035073393
+          },
+          {
+            "name": "Modern Defense",
+            "n": 6578,
+            "score_residual": -0.012080667508711446
+          },
+          {
+            "name": "King's Gambit Accepted",
+            "n": 5519,
+            "score_residual": -0.012396870531739636
+          },
+          {
+            "name": "Pirc Defense",
+            "n": 8138,
+            "score_residual": -0.014067236517591621
+          }
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "name": "Underrated 1.e4 overperformer",
+      "blurb": "Outperforming Elo by +0.11 score per game (and +0.15 in long games). Classical 1.e4 player whose rating hasn't caught up.",
+      "size": 28558,
+      "avg_rating": 1540.2586585256822,
+      "feature_means": {
+        "score_residual": 0.1077547267153202,
+        "white_score_residual": 0.12438210701297886,
+        "black_score_residual": 0.09164934056933755,
+        "long_game_residual": 0.15018496297514003,
+        "draw_rate": 0.03752308836983244,
+        "mate_rate": 0.253002599717989,
+        "timeout_rate": 0.1705646975795305,
+        "resign_rate": 0.5425968515113735,
+        "avg_moves": 32.608289387961975,
+        "short_game_rate": 0.2122890528054451,
+        "opening_diversity": 0.5681122528346718,
+        "pct_e4_as_white": 0.8337531723657742,
+        "pct_d4_as_white": 0.05080957104158668,
+        "pct_sicilian_as_black": 0.14863689866151786,
+        "avg_castle_move": 19.79147594668627,
+        "pct_queenside_castle": 0.15947217398670183,
+        "avg_queens_off_move": 42.06103175443332,
+        "early_pawn_pushes": 4.04020134863832
+      },
+      "top_openings": {
+        "white": [
+          {
+            "name": "Italian Game",
+            "n": 37336,
+            "score_residual": 0.06408898725275917
+          },
+          {
+            "name": "Scotch Game",
+            "n": 18526,
+            "score_residual": 0.0517959538901669
+          },
+          {
+            "name": "King's Pawn Game",
+            "n": 18149,
+            "score_residual": 0.05058866355752173
+          },
+          {
+            "name": "Queen's Pawn Game",
+            "n": 13541,
+            "score_residual": 0.050065667092322234
+          },
+          {
+            "name": "Ruy Lopez",
+            "n": 16083,
+            "score_residual": 0.041233121763234924
+          }
+        ],
+        "black": [
+          {
+            "name": "Sicilian Defense",
+            "n": 45043,
+            "score_residual": 0.05643444799616397
+          },
+          {
+            "name": "French Defense",
+            "n": 25840,
+            "score_residual": 0.04778013467333122
+          },
+          {
+            "name": "Caro-Kann Defense",
+            "n": 23276,
+            "score_residual": 0.04464613162110762
+          },
+          {
+            "name": "Scandinavian Defense",
+            "n": 22697,
+            "score_residual": 0.042293362432499655
+          },
+          {
+            "name": "Philidor Defense",
+            "n": 12469,
+            "score_residual": 0.024261080859028714
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "name": "1.e4 grinder",
+      "blurb": "Higher-rated 1.e4 specialist (~1790). Longest games in the dataset (75 moves avg), Sicilian defender as Black.",
+      "size": 40932,
+      "avg_rating": 1788.7084485871542,
+      "feature_means": {
+        "score_residual": -0.022209660924360403,
+        "white_score_residual": -0.00994223548994784,
+        "black_score_residual": -0.03457332767889553,
+        "long_game_residual": -0.05025611644311421,
+        "draw_rate": 0.055912477671572404,
+        "mate_rate": 0.22405138438129335,
+        "timeout_rate": 0.2502493771649832,
+        "resign_rate": 0.4771708532161834,
+        "avg_moves": 37.617235574258636,
+        "short_game_rate": 0.11356655281162055,
+        "opening_diversity": 0.5409828305538639,
+        "pct_e4_as_white": 0.857531284125831,
+        "pct_d4_as_white": 0.025036773915337252,
+        "pct_sicilian_as_black": 0.2355139731345878,
+        "avg_castle_move": 18.729243211554603,
+        "pct_queenside_castle": 0.108277121523834,
+        "avg_queens_off_move": 48.4028684995066,
+        "early_pawn_pushes": 4.3092387826447265
+      },
+      "top_openings": {
+        "white": [
+          {
+            "name": "Scotch Game",
+            "n": 22797,
+            "score_residual": 0.00813872219538754
+          },
+          {
+            "name": "Center Game",
+            "n": 5559,
+            "score_residual": 0.0030940995999312487
+          },
+          {
+            "name": "Vienna Game",
+            "n": 14011,
+            "score_residual": 0.0027079870638762123
+          },
+          {
+            "name": "Bishop's Opening",
+            "n": 21280,
+            "score_residual": 0.0026638834429913234
+          },
+          {
+            "name": "King's Pawn Game",
+            "n": 26233,
+            "score_residual": 0.0003577866600979001
+          }
+        ],
+        "black": [
+          {
+            "name": "Nimzowitsch Defense",
+            "n": 9322,
+            "score_residual": -0.0027855059873743305
+          },
+          {
+            "name": "Alekhine Defense",
+            "n": 7768,
+            "score_residual": -0.004504120890896991
+          },
+          {
+            "name": "Englund Gambit",
+            "n": 8640,
+            "score_residual": -0.004766987955354725
+          },
+          {
+            "name": "Dutch Defense",
+            "n": 6887,
+            "score_residual": -0.005194932293032524
+          },
+          {
+            "name": "Benoni Defense",
+            "n": 12423,
+            "score_residual": -0.006015065122289085
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "name": "Queenside king-hunter",
+      "blurb": "Aggressive attacking style: 41% queenside castles, castles late (avg move 14), 38% mate rate \u2014 the highest. Goes for the king.",
+      "size": 20803,
+      "avg_rating": 1414.550053654337,
+      "feature_means": {
+        "score_residual": -0.0029435356358380946,
+        "white_score_residual": 0.013866020702299715,
+        "black_score_residual": -0.01997966200996319,
+        "long_game_residual": -0.05180291838752056,
+        "draw_rate": 0.040208963617412136,
+        "mate_rate": 0.3755383529397441,
+        "timeout_rate": 0.2300862493829594,
+        "resign_rate": 0.3605365487866815,
+        "avg_moves": 34.6868959511977,
+        "short_game_rate": 0.17416191287457916,
+        "opening_diversity": 0.3965563404940325,
+        "pct_e4_as_white": 0.5576683898113007,
+        "pct_d4_as_white": 0.12000358607532895,
+        "pct_sicilian_as_black": 0.04079309715901007,
+        "avg_castle_move": 26.979242647555637,
+        "pct_queenside_castle": 0.4115673402775742,
+        "avg_queens_off_move": 42.26481199878516,
+        "early_pawn_pushes": 4.376453509219921
+      },
+      "top_openings": {
+        "white": [
+          {
+            "name": "Bishop's Opening",
+            "n": 16566,
+            "score_residual": 0.01420235332913437
+          },
+          {
+            "name": "Queen's Pawn Game",
+            "n": 48820,
+            "score_residual": 0.01370021947469587
+          },
+          {
+            "name": "King's Pawn Game",
+            "n": 30833,
+            "score_residual": 0.012664912365038954
+          },
+          {
+            "name": "Scotch Game",
+            "n": 8269,
+            "score_residual": 0.007904250582481225
+          },
+          {
+            "name": "Nimzo-Larsen Attack",
+            "n": 13442,
+            "score_residual": 0.007474670091013443
+          }
+        ],
+        "black": [
+          {
+            "name": "Englund Gambit",
+            "n": 8416,
+            "score_residual": -0.0005359763460642576
+          },
+          {
+            "name": "English Defense",
+            "n": 5534,
+            "score_residual": -0.0023798082144025523
+          },
+          {
+            "name": "Petrov's Defense",
+            "n": 6386,
+            "score_residual": -0.002841275778045592
+          },
+          {
+            "name": "Modern Defense",
+            "n": 8430,
+            "score_residual": -0.0033369315154971727
+          },
+          {
+            "name": "Nimzowitsch Defense",
+            "n": 9369,
+            "score_residual": -0.0034673917153597335
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "name": "1.d4 specialist",
+      "blurb": "Closed-position devotee. Only 6% 1.e4 \u2014 almost exclusively plays 1.d4 (48%) as White. Solid, positional style.",
+      "size": 35261,
+      "avg_rating": 1739.688106319736,
+      "feature_means": {
+        "score_residual": 0.006522244770883058,
+        "white_score_residual": 0.029865808160960308,
+        "black_score_residual": -0.016872093489616158,
+        "long_game_residual": 0.017608727265766462,
+        "draw_rate": 0.04989437403305879,
+        "mate_rate": 0.20209648333539085,
+        "timeout_rate": 0.20986870642132868,
+        "resign_rate": 0.5435970248466422,
+        "avg_moves": 35.81737321646428,
+        "short_game_rate": 0.1446693392251609,
+        "opening_diversity": 0.4716815653820982,
+        "pct_e4_as_white": 0.055965142170248956,
+        "pct_d4_as_white": 0.4770881830772898,
+        "pct_sicilian_as_black": 0.26450886717261873,
+        "avg_castle_move": 20.732333463371862,
+        "pct_queenside_castle": 0.1099780819344236,
+        "avg_queens_off_move": 47.475465944577635,
+        "early_pawn_pushes": 4.526301568642138
+      },
+      "top_openings": {
+        "white": [
+          {
+            "name": "Queen's Pawn Game",
+            "n": 197934,
+            "score_residual": 0.02942647884765415
+          },
+          {
+            "name": "English Opening",
+            "n": 47017,
+            "score_residual": 0.024821175213702005
+          },
+          {
+            "name": "Zukertort Opening",
+            "n": 20777,
+            "score_residual": 0.01345943676499242
+          },
+          {
+            "name": "Hungarian Opening",
+            "n": 12747,
+            "score_residual": 0.011974406072401798
+          },
+          {
+            "name": "Rapport-Jobava System",
+            "n": 9253,
+            "score_residual": 0.010709818547890493
+          }
+        ],
+        "black": [
+          {
+            "name": "Petrov's Defense",
+            "n": 5277,
+            "score_residual": -0.0005118362300625202
+          },
+          {
+            "name": "Alekhine Defense",
+            "n": 6468,
+            "score_residual": -0.0017350639299128635
+          },
+          {
+            "name": "Nimzowitsch Defense",
+            "n": 5922,
+            "score_residual": -0.0026591490872150208
+          },
+          {
+            "name": "Benoni Defense",
+            "n": 10907,
+            "score_residual": -0.002875582578355861
+          },
+          {
+            "name": "Caro-Kann Defense",
+            "n": 68945,
+            "score_residual": -0.0031601568899520473
+          }
+        ]
+      }
+    }
+  ]
+}
