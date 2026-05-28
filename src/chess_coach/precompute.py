@@ -74,6 +74,57 @@ CLUSTER_PROFILES: dict[int, dict[str, str]] = {
 }
 
 
+# Shrinkage strength + min sample for the head-to-head residual table.
+# Lower min than the display recommendations (5000) so more families have
+# entries for both colours, giving more matchup overlap.
+_VS_SHRINKAGE_K = 30_000
+_VS_MIN_GAMES = 800
+
+
+def _family_residual_table(
+    games: pl.DataFrame, clustered: pl.DataFrame, cluster: int
+) -> dict[str, dict[str, float]]:
+    """Per-(colour, family) shrunk score residual for one cluster.
+
+    No colour-appropriate filtering (unlike the display recommendations):
+    we want White *and* Black residuals for every family so a head-to-head
+    can ask "how does cluster A do as White in family F vs how does cluster
+    B do as Black in F". Returns {"white": {family: resid}, "black": {...}}.
+    """
+    members = clustered.filter(pl.col("cluster") == cluster).select("username")
+    expected = 1.0 / (
+        1.0 + (10.0 ** ((pl.col("opponent_rating") - pl.col("user_rating")) / 400.0))
+    )
+    actual = (
+        pl.when(pl.col("result") == "win").then(1.0)
+        .when(pl.col("result") == "draw").then(0.5)
+        .otherwise(0.0)
+    )
+    family = pl.col("opening_name").str.split(":").list.get(0).str.strip_chars()
+
+    out: dict[str, dict[str, float]] = {}
+    base = (
+        games.join(members, on="username", how="inner")
+        .filter(pl.col("opening_name").is_not_null())
+        .with_columns(score_diff=(actual - expected), family=family)
+    )
+    for color in ("white", "black"):
+        agg = (
+            base.filter(pl.col("color") == color)
+            .group_by("family")
+            .agg(n=pl.len(), raw=pl.col("score_diff").mean())
+            .filter(pl.col("n") >= _VS_MIN_GAMES)
+            .with_columns(
+                resid=pl.col("n") / (pl.col("n") + _VS_SHRINKAGE_K) * pl.col("raw")
+            )
+        )
+        out[color] = {
+            row["family"]: round(float(row["resid"]), 4)
+            for row in agg.iter_rows(named=True)
+        }
+    return out
+
+
 def build_recommendations(
     games: pl.DataFrame,
     clustered: pl.DataFrame,
@@ -131,6 +182,7 @@ def build_recommendations(
             "size": int(members.height),
             "avg_rating": float(members["avg_rating"].mean()),
             "accuracy": accuracy,
+            "family_residuals": _family_residual_table(games, clustered, cid),
             "feature_means": feature_means,
             "top_openings": {
                 "white": serialise(white),
