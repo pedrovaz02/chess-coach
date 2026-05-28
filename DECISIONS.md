@@ -325,6 +325,28 @@ naturally:
 | 3 | 20,803 | 1,415  | Queenside king-hunter          |
 | 4 | 35,261 | 1,740  | 1.d4 specialist                |
 
+**Is 5 enough? We tested K=10** (`scripts/inspect_k.py --k 10`). Findings:
+
+- Silhouette *drops* 0.083 → 0.070 — no clustering-quality gain, as the
+  continuum (§ 4.3) predicts.
+- Mean dominant-K5 share per K=10 cluster is 73% — most of the extra
+  clusters are **rating splits** of the existing five (the same style at a
+  higher/lower band: e.g. the 1.d4 specialist splits into a ~1566 and a
+  ~1811 version; Quick amateur into ~1348 and ~1545).
+- But **one genuinely new identity surfaces**: a *Sicilian specialist*
+  (92% Sicilian as Black, ~1847) that K=5 had spread across the grinder
+  and d4-specialist clusters. Two weaker behavioural sub-types also appear
+  — a high-timeout e4 player (39%) and a high-mate aggressor (49%).
+
+Read: "Black defence choice" is an axis K=5 under-resolves. K=10 doesn't
+unlock hidden structure (it's still slicing one cloud), but the Sicilian
+specialist is a real, nameable group worth knowing about. For the
+production model K=5 stays — interpretable, replicable, stable. The
+Sicilian finding is a candidate for a future dedicated feature rather than
+a reason to raise K.
+
+![K=10 characterisation](docs/figures/10_k10_characterisation.png)
+
 ---
 
 ### 4.3 Chess style is a continuum, not clusters
