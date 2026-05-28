@@ -27,6 +27,11 @@
       "blurb": "Plays 1.e4 84% of the time, decides games fast \u2014 30% finish before move 20 per side. Tactical short games dominate.",
       "size": 28956,
       "avg_rating": 1430.7681898250125,
+      "accuracy": {
+        "avg_acpl": 77.0798852850883,
+        "avg_blunder_rate": 0.09629606772164681,
+        "n_players": 16206
+      },
       "feature_means": {
         "score_residual": -0.05265174832145635,
         "white_score_residual": -0.029424252989072162,
@@ -110,6 +115,11 @@
       "blurb": "Outperforming Elo by +0.11 score per game (and +0.15 in long games). Classical 1.e4 player whose rating hasn't caught up.",
       "size": 28558,
       "avg_rating": 1540.2586585256822,
+      "accuracy": {
+        "avg_acpl": 68.11482840894496,
+        "avg_blunder_rate": 0.08161594547151783,
+        "n_players": 14348
+      },
       "feature_means": {
         "score_residual": 0.1077547267153202,
         "white_score_residual": 0.12438210701297886,
@@ -193,6 +203,11 @@
       "blurb": "Higher-rated 1.e4 specialist (~1790). Longest games in the dataset (75 moves avg), Sicilian defender as Black.",
       "size": 40932,
       "avg_rating": 1788.7084485871542,
+      "accuracy": {
+        "avg_acpl": 65.48204343977804,
+        "avg_blunder_rate": 0.07627416269289214,
+        "n_players": 21513
+      },
       "feature_means": {
         "score_residual": -0.022209660924360403,
         "white_score_residual": -0.00994223548994784,
@@ -276,6 +291,11 @@
       "blurb": "Aggressive attacking style: 41% queenside castles, castles late (avg move 14), 38% mate rate \u2014 the highest. Goes for the king.",
       "size": 20803,
       "avg_rating": 1414.550053654337,
+      "accuracy": {
+        "avg_acpl": 90.21139514826112,
+        "avg_blunder_rate": 0.11113231092286538,
+        "n_players": 9693
+      },
       "feature_means": {
         "score_residual": -0.0029435356358380946,
         "white_score_residual": 0.013866020702299715,
@@ -359,6 +379,11 @@
       "blurb": "Closed-position devotee. Only 6% 1.e4 \u2014 almost exclusively plays 1.d4 (48%) as White. Solid, positional style.",
       "size": 35261,
       "avg_rating": 1739.688106319736,
+      "accuracy": {
+        "avg_acpl": 64.38052292776068,
+        "avg_blunder_rate": 0.0754413951698928,
+        "n_players": 19573
+      },
       "feature_means": {
         "score_residual": 0.006522244770883058,
         "white_score_residual": 0.029865808160960308,

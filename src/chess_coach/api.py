@@ -125,6 +125,7 @@ def recommend(username: str, max_games: int = 100) -> JSONResponse:
             "blurb": cluster_meta["blurb"],
             "size": cluster_meta["size"],
             "avg_rating": cluster_meta["avg_rating"],
+            "accuracy": cluster_meta.get("accuracy"),
         },
         "top_openings": cluster_meta["top_openings"],
         "feature_comparison": feature_comparison,

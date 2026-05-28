@@ -58,8 +58,17 @@ function render(data) {
   document.getElementById("cluster-blurb").textContent = data.cluster.blurb;
   document.getElementById("user-rating").textContent = Math.round(data.user_rating);
   document.getElementById("cluster-rating").textContent = Math.round(data.cluster.avg_rating);
-  document.getElementById("cluster-size").textContent = `${data.cluster.size} players`;
+  document.getElementById("cluster-size").textContent = `${data.cluster.size.toLocaleString()} players`;
   document.getElementById("n-games").textContent = data.n_games_used;
+
+  const acplEl = document.getElementById("cluster-acpl");
+  if (data.cluster.accuracy) {
+    const acpl = Math.round(data.cluster.accuracy.avg_acpl);
+    const blunder = (data.cluster.accuracy.avg_blunder_rate * 100).toFixed(1);
+    acplEl.textContent = `${acpl} cp loss · ${blunder}% blunders`;
+  } else {
+    acplEl.textContent = "—";
+  }
 
   renderOpenings(document.getElementById("white-openings"), data.top_openings.white);
   renderOpenings(document.getElementById("black-openings"), data.top_openings.black);

@@ -108,6 +108,19 @@ def build_recommendations(
                 for row in df.iter_rows(named=True)
             ]
 
+        # Accuracy stats for this cluster — only over players with enough
+        # analysed games for a stable per-player ACPL (>= 3). May be absent
+        # if the dataset has no eval data (e.g. API-collected).
+        accuracy = None
+        if "acpl" in members.columns and "n_analyzed_games" in members.columns:
+            analyzed = members.filter(pl.col("n_analyzed_games") >= 3)
+            if analyzed.height > 0:
+                accuracy = {
+                    "avg_acpl": float(analyzed["acpl"].mean()),
+                    "avg_blunder_rate": float(analyzed["blunder_rate"].mean()),
+                    "n_players": int(analyzed.height),
+                }
+
         profile = CLUSTER_PROFILES.get(
             cid, {"name": f"Cluster {cid}", "blurb": ""}
         )
@@ -117,6 +130,7 @@ def build_recommendations(
             "blurb": profile["blurb"],
             "size": int(members.height),
             "avg_rating": float(members["avg_rating"].mean()),
+            "accuracy": accuracy,
             "feature_means": feature_means,
             "top_openings": {
                 "white": serialise(white),
