@@ -220,13 +220,17 @@ Each `(cluster, color)` ranking goes through three filters:
 
 ## Honest findings
 
-- **Silhouette ~0.08** across every experiment — 281 players, 5 044 players,
-  154 510 players; 8 features, 13 features, 18 features. This pattern is
-  stable enough to be the headline finding: chess playstyle is most likely
-  a **continuum**, not a discrete partition. K-Means imposes hard borders
-  on a cloud that doesn't naturally have them. The clusters are still
-  interpretable, but a continuous embedding or Gaussian-mixture model would
-  probably fit the data better. See [`DECISIONS.md` § 4.3](DECISIONS.md#43-chess-style-is-a-continuum-not-clusters).
+- **Chess playstyle is a continuum, not discrete clusters** — confirmed by
+  three independent algorithms. K-Means silhouette stays ~0.08 across 281 →
+  154 510 players and 8 → 18 features. To rule out "K-Means is just a bad
+  fit", GMM and HDBSCAN were run on a PCA-6 projection (to avoid
+  high-dimensional artifacts): GMM's BIC is nearly flat (no natural K) with
+  responsibilities that soften as components are added, and HDBSCAN labels
+  82–100% of players as noise (no density-separated groups). All three
+  converge: the clusters are useful labels imposed on a smooth style space,
+  not natural types. See [`DECISIONS.md` § 9](DECISIONS.md#9-validating-the-continuum-hypothesis-alt-clustering).
+
+![Clustering comparison](docs/figures/08_clustering_comparison.png)
 
 - **Skill adjustment is the single most valuable feature engineering
   choice.** Without it, raw `win_rate` re-discovers the rating column —

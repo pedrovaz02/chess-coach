@@ -730,6 +730,63 @@ clustering, yet it separates the clusters in a way the identities predict.
 
 ---
 
+## 9. Validating the continuum hypothesis (alt clustering)
+
+### 9.1 The claim under test
+
+K-Means silhouette sat at ~0.08 across every data scale and feature set.
+That's consistent with "playstyle is a continuum, not discrete clusters" —
+but low silhouette alone is weak evidence (K-Means could just be a poor fit
+while real clusters exist). So we stress-tested with two independent
+algorithms (`scripts/clustering_comparison.py`).
+
+### 9.2 Controlling for the curse of dimensionality
+
+First attempt ran GMM and HDBSCAN on the raw 18-dim standardised features.
+The results were misleading: GMM gave max-responsibility ≈ 1.0 (looks like
+crisp clusters) and HDBSCAN labelled ~100% of points as noise. Both are
+**high-dimensional artifacts** — in 18-dim, full-covariance Gaussian
+densities become extreme (overconfident assignments) and Euclidean
+distances concentrate (density-based methods break).
+
+Fix: run GMM and HDBSCAN on a **PCA-6 projection** (65% of variance), where
+probabilities and density are meaningful. Now an "all-noise" or
+"hard-assignment" result reflects the data's geometry, not the metric
+breaking down.
+
+### 9.3 Result: three algorithms converge on continuum
+
+On the PCA-6 projection (30k-player subsample):
+
+| Method   | Signal                                              | Reading                          |
+| ---      | ---                                                 | ---                              |
+| K-Means  | silhouette 0.08–0.10, flat across K=2..8            | no crisp boundaries              |
+| GMM      | BIC nearly flat (591k → 583k, −1.4% from K=2 to 8); max responsibility decays 0.97 → 0.71; entropy rises 0.14 → 0.37 | no natural K; components overlap |
+| HDBSCAN  | 82% noise at min_cluster_size 50–100; 100% noise at ≥250 | no density-separated groups      |
+
+The flat GMM BIC is the cleanest piece: if there were K natural clusters,
+BIC would show a clear knee at K. It doesn't — adding components barely
+improves the fit, exactly what you'd expect when tiling a smooth cloud with
+more Gaussians.
+
+![Clustering comparison](docs/figures/08_clustering_comparison.png)
+
+### 9.4 What this means for the project
+
+The clusters are **useful labels imposed on a continuum**, not discovered
+natural groups. That's a legitimate and common situation — the K-Means
+clusters are still interpretable and drive sensible recommendations (the
+Phase 3 accuracy finding shows they track real style). But the honest
+framing is "we partition a continuous style space into 5 reference regions",
+not "chess players fall into 5 types".
+
+A genuinely continuum-native model would skip hard clustering entirely:
+recommend openings from the *k nearest neighbours* in style space, or learn
+a continuous style embedding. That's the natural next architecture if the
+project is taken further.
+
+---
+
 ## Reading list / references
 
 - Lichess open database: <https://database.lichess.org/>
