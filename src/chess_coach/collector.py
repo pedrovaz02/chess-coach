@@ -67,6 +67,12 @@ GAME_COLUMNS = [
     "user_rating",
     "opponent_username",
     "opponent_rating",
+    # Phase 3 — accuracy features from [%eval] annotations (dump only;
+    # null for API-collected games and for dump games without analysis).
+    "has_eval",
+    "acpl",
+    "blunders",
+    "n_eval_moves",
 ]
 
 
@@ -160,6 +166,11 @@ def game_to_row(game: dict, target_user: str) -> dict | None:
         "user_rating": players.get(user_side, {}).get("rating"),
         "opponent_username": opp_user,
         "opponent_rating": players.get(opp_side, {}).get("rating"),
+        # API path doesn't request evals — accuracy columns are null here.
+        "has_eval": False,
+        "acpl": None,
+        "blunders": None,
+        "n_eval_moves": None,
     }
 
 

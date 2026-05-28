@@ -141,6 +141,75 @@ def is_valid_player(name: str | None) -> bool:
     return True
 
 
+# ── Accuracy / ACPL from [%eval] annotations ────────────────────────────
+# Per-move centipawn loss is capped so a single blunder doesn't dominate the
+# average; moves losing >= BLUNDER_THRESHOLD count as blunders.
+CP_CAP = 1000
+BLUNDER_THRESHOLD = 200
+INITIAL_EVAL = 20  # assumed White edge at the start position (centipawns)
+
+
+def _walk_game(game: chess.pgn.Game):
+    """Single pass over the mainline. Returns (san_moves, white_pov_cps).
+
+    white_pov_cps[i] is the engine eval in centipawns (White's POV) after
+    ply i+1, or None if that ply has no [%eval] annotation.
+    """
+    board = game.board()
+    san_moves: list[str] = []
+    cps: list[int | None] = []
+    for node in game.mainline():
+        san_moves.append(board.san(node.move))
+        board.push(node.move)
+        score = node.eval()  # python-chess parses [%eval ...] from the comment
+        cps.append(score.white().score(mate_score=10000) if score is not None else None)
+    return san_moves, cps
+
+
+def _acpl_from_cps(cps: list[int | None]) -> dict | None:
+    """Per-colour ACPL + blunder counts from White-POV centipawn evals.
+
+    Returns None if the game has no evals at all. Centipawn loss for a move
+    is how much the position worsened from the mover's perspective relative
+    to the eval before the move (clamped to [0, CP_CAP]).
+    """
+    if not any(cp is not None for cp in cps):
+        return None
+
+    white_losses: list[int] = []
+    black_losses: list[int] = []
+    white_blun = black_blun = 0
+
+    for i, after in enumerate(cps):
+        if after is None:
+            continue
+        before = cps[i - 1] if i >= 1 and cps[i - 1] is not None else INITIAL_EVAL
+        is_white_move = (i % 2 == 0)  # ply index 0 == White's first move
+        # Loss = how much worse it got for the mover (White POV evals).
+        loss = (before - after) if is_white_move else (after - before)
+        loss = max(0, min(loss, CP_CAP))
+        if is_white_move:
+            white_losses.append(loss)
+            if loss >= BLUNDER_THRESHOLD:
+                white_blun += 1
+        else:
+            black_losses.append(loss)
+            if loss >= BLUNDER_THRESHOLD:
+                black_blun += 1
+
+    def mean(xs: list[int]) -> float | None:
+        return sum(xs) / len(xs) if xs else None
+
+    return {
+        "white_acpl": mean(white_losses),
+        "black_acpl": mean(black_losses),
+        "white_blunders": white_blun,
+        "black_blunders": black_blun,
+        "white_n_eval": len(white_losses),
+        "black_n_eval": len(black_losses),
+    }
+
+
 def game_to_player_rows(game: chess.pgn.Game) -> list[dict] | None:
     """Convert a parsed PGN game to two rows (one per side). None if invalid."""
     h = game.headers
@@ -175,19 +244,17 @@ def game_to_player_rows(game: chess.pgn.Game) -> list[dict] | None:
     if speed is None:
         return None
 
-    # Reconstruct move SAN string by walking the mainline.
-    # python-chess gives us the parsed mainline; the original move text was
-    # consumed during parsing. Rebuild it cheaply.
-    board = game.board()
-    san_moves: list[str] = []
-    for move in game.mainline_moves():
-        san_moves.append(board.san(move))
-        board.push(move)
+    # Single pass over the mainline: reconstruct SAN + pull [%eval] evals.
+    san_moves, cps = _walk_game(game)
     moves_str = " ".join(san_moves)
     n_moves = len(san_moves)
 
     if n_moves < 4:
         return None
+
+    # Accuracy stats (None if the game wasn't computer-analysed).
+    acpl = _acpl_from_cps(cps)
+    has_eval = acpl is not None
 
     termination = h.get("Termination", "Normal")
     status = termination_to_status(termination, result, moves_str)
@@ -207,6 +274,13 @@ def game_to_player_rows(game: chess.pgn.Game) -> list[dict] | None:
         else:
             per_side_result = "loss"
 
+        if acpl is None:
+            side_acpl = side_blun = side_neval = None
+        else:
+            side_acpl = acpl[f"{side}_acpl"]
+            side_blun = acpl[f"{side}_blunders"]
+            side_neval = acpl[f"{side}_n_eval"]
+
         rows.append({
             "username": user,
             "game_id": game_id,
@@ -224,6 +298,10 @@ def game_to_player_rows(game: chess.pgn.Game) -> list[dict] | None:
             "user_rating": user_rating,
             "opponent_username": opp_user,
             "opponent_rating": opp_rating,
+            "has_eval": has_eval,
+            "acpl": side_acpl,
+            "blunders": side_blun,
+            "n_eval_moves": side_neval,
         })
     return rows
 
