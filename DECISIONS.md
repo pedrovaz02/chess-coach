@@ -638,6 +638,8 @@ easy to bump for Phase 4.
 - **Obscure openings have inflated score residuals.** Self-selection bias:
   only the rare players who study Borg Defense play it, and they study it
   deeply, so they over-perform. Bayesian shrinkage corrects for this.
+- **Accuracy (ACPL) carries style signal beyond rating** — Phase 3 result.
+  See § 8.
 
 ### Things deliberately deferred
 
@@ -657,6 +659,74 @@ easy to bump for Phase 4.
   games/s, which is fast enough. Diminishing returns from a port.
 - **More than 5 clusters.** K=5 captures the meaningful divisions; K=6+
   splits one cluster in two without adding interpretability.
+
+---
+
+## 8. Phase 3 — accuracy from `[%eval]` annotations
+
+### 8.1 Use Lichess's pre-computed evals, not local Stockfish
+
+**Context.** The strongest playstyle signals come from engine analysis —
+accuracy, blunder rate, centipawn loss. Running Stockfish locally over 5 M
+games would take ~2-3 days even parallelised.
+
+**Decision.** Parse the `[%eval ...]` comments that Lichess already embeds
+in analysed games. ~12% of dump games carry them (verified: 13.5% of our
+extracted games).
+
+**Why.** Lichess analysed those games once, for free. python-chess reads the
+evals via `node.eval()` in the same mainline pass that reconstructs SAN —
+zero extra engine compute. The 12% sub-sample still yields 1.35 M analysed
+games and accuracy data for 87% of clustered players (a player needs only
+one analysed game among their 20+).
+
+**Outcome.** ACPL (average centipawn loss, capped [0, 1000] per move,
+weighted across a player's analysed games) and blunder rate, computed during
+extraction at no measurable speed cost.
+
+### 8.2 Accuracy is metadata, not a clustering feature
+
+**Context.** Could add ACPL to the 18-feature clustering vector.
+
+**Decision.** Keep it as metadata (`acpl`, `blunder_rate`,
+`n_analyzed_games` columns alongside `n_games` and `avg_rating`), not in
+`FEATURE_COLUMNS`.
+
+**Why.** The live recommender fetches a user's games from the REST API,
+which doesn't return evals — so a live user has *no* accuracy data. If ACPL
+were a clustering feature it would be null at inference and filled with the
+population mean, contributing nothing. Better to keep clustering on signals
+available for everyone, and use accuracy as an enrichment overlay.
+
+### 8.3 Finding: accuracy carries style signal beyond rating
+
+The payoff. ACPL correlates with rating at −0.55 (accuracy *is* a big part
+of strength), but the cluster differences persist **within a fixed rating
+band**, proving style — not strength — drives them.
+
+All players at ~1428 rating (band 1350-1500):
+
+| Cluster                       | ACPL | Blunder rate |
+| ---                           | ---  | ---          |
+| C1 Underrated 1.e4 overperf.  | 70.4 | 8.5%         |
+| C4 1.d4 specialist            | 73.4 | 8.9%         |
+| C0 Quick 1.e4 amateur         | 74.8 | 9.3%         |
+| C2 1.e4 grinder               | 77.8 | 9.4%         |
+| C3 Queenside king-hunter      | 86.2 | 10.5%        |
+
+Two independent validations of the cluster identities:
+
+- The **Queenside king-hunter** is ~16 cp/move less accurate than the
+  Underrated cluster *at the same rating* — it genuinely trades precision
+  for attacking chances, exactly what an aggressive sacrificial style should
+  look like.
+- The **Underrated overperformer** is the most accurate in the band,
+  consistent with its +0.11 score residual: it really does play above its
+  rating level.
+
+This is the strongest evidence in the project that the clusters capture real
+playstyle and not just rating buckets — accuracy was never an input to the
+clustering, yet it separates the clusters in a way the identities predict.
 
 ---
 
