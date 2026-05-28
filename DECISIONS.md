@@ -1,5 +1,7 @@
 # Decisions log
 
+*🇬🇧 English · [🇵🇹 Português](DECISIONS.pt.md)*
+
 This document tracks the design and engineering decisions that shaped
 chess-coach. Each entry has the context (what was the situation), what we
 chose, what alternatives we considered, and the outcome with hindsight.

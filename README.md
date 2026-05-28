@@ -12,6 +12,8 @@ short_description: Lichess opening recommender via playstyle clustering
 
 # Chess Coach
 
+*🇬🇧 English · [🇵🇹 Português](README.pt.md)*
+
 Opening recommender that matches a Lichess player to a stylistic cluster of
 other players and surfaces the openings those players historically succeed
 with. Trained on **5 M rated games from the Lichess April-2026 monthly
