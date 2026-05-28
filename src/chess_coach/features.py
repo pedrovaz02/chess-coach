@@ -40,12 +40,19 @@ Metadata (kept but not fed to model):
 from __future__ import annotations
 
 import argparse
+import multiprocessing as mp
+import os
 import time
 from pathlib import Path
 
 import chess
 import polars as pl
 from rich.console import Console
+
+# Below this many unique games, parse single-threaded — spawning a worker
+# pool costs ~1-2s of startup, not worth it for the live recommender (~100
+# games). Above it (training runs of millions), parallelise across cores.
+_PARALLEL_PARSE_THRESHOLD = 20_000
 
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -143,35 +150,56 @@ def _parse_move_features(moves_str: str) -> dict:
     return out
 
 
-def _add_move_features(games: pl.DataFrame) -> pl.DataFrame:
+def _parse_move_features_with_id(args: tuple[str, str]) -> dict:
+    """Pool worker: parse one game's moves, tag with its game_id."""
+    gid, moves = args
+    feats = _parse_move_features(moves)
+    feats["game_id"] = gid
+    return feats
+
+
+def _add_move_features(games: pl.DataFrame, n_workers: int | None = None) -> pl.DataFrame:
     """Enrich games with per-row move-level features.
 
     Each game (game_id) is parsed once; the resulting per-side features are
-    joined back onto both rows of the game.
+    joined back onto both rows of the game. Parsing is the bottleneck of the
+    whole feature build, so for large inputs it's spread across a process
+    pool (same trick as dump_extract).
     """
     # Dedupe by game to parse each game exactly once.
     unique_games = (
         games.unique(subset=["game_id"]).select(["game_id", "moves"])
     )
     n = unique_games.height
-    print(f"Parsing moves for {n:,} unique games...", flush=True)
-
-    parsed: list[dict] = []
+    rows = unique_games.iter_rows()  # (game_id, moves) tuples
     start = time.monotonic()
-    last_report = start
-    for idx, (gid, moves) in enumerate(unique_games.iter_rows(), start=1):
-        feats = _parse_move_features(moves)
-        feats["game_id"] = gid
-        parsed.append(feats)
-        if idx % 50_000 == 0:
-            now = time.monotonic()
-            rate = idx / (now - start)
-            eta = (n - idx) / rate if rate > 0 else 0
-            print(
-                f"  {idx:>10,}/{n:,} games  rate {rate:.0f}/s  ETA {eta:.0f}s",
-                flush=True,
-            )
-            last_report = now
+
+    if n < _PARALLEL_PARSE_THRESHOLD:
+        # Single-threaded — small input (e.g. live recommender).
+        print(f"Parsing moves for {n:,} unique games (single-thread)...", flush=True)
+        parsed = [_parse_move_features_with_id(r) for r in rows]
+    else:
+        if n_workers is None:
+            n_workers = max(1, (os.cpu_count() or 4) - 2)
+        print(
+            f"Parsing moves for {n:,} unique games ({n_workers} workers)...",
+            flush=True,
+        )
+        ctx = mp.get_context("spawn")
+        parsed = []
+        with ctx.Pool(processes=n_workers) as pool:
+            for idx, feats in enumerate(
+                pool.imap(_parse_move_features_with_id, rows, chunksize=500), start=1
+            ):
+                parsed.append(feats)
+                if idx % 100_000 == 0:
+                    elapsed = time.monotonic() - start
+                    rate = idx / elapsed if elapsed > 0 else 0
+                    eta = (n - idx) / rate if rate > 0 else 0
+                    print(
+                        f"  {idx:>10,}/{n:,} games  rate {rate:.0f}/s  ETA {eta:.0f}s",
+                        flush=True,
+                    )
 
     parsed_df = pl.DataFrame(parsed)
 

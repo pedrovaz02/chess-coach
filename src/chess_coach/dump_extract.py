@@ -392,6 +392,7 @@ def extract(
     flush_every: int = 100_000,
     n_workers: int | None = None,
     chunksize: int = 64,
+    skip: int = 0,
 ) -> None:
     """Parallel stream-extract a .pgn.zst into a per-player parquet.
 
@@ -444,6 +445,14 @@ def extract(
 
     try:
         text_iter = _iter_game_texts(pgn)
+        # Skip the first `skip` games (cheaply, without parsing) so an
+        # independent disjoint sample can be drawn from later in the stream.
+        if skip > 0:
+            print(f"Skipping first {skip:,} games before extracting...", flush=True)
+            for n_skipped, _ in enumerate(text_iter, start=1):
+                if n_skipped >= skip:
+                    break
+            print(f"Skipped {skip:,}. Now extracting.", flush=True)
         results = pool.imap_unordered(_parse_one_game, text_iter, chunksize=chunksize)
 
         for rows, err in results:
@@ -531,6 +540,11 @@ def main() -> None:
         "--chunksize", type=int, default=64,
         help="Tasks per worker dispatch. Higher = less IPC overhead, more memory."
     )
+    parser.add_argument(
+        "--skip", type=int, default=0,
+        help="Skip the first N games in the stream before extracting. Use to "
+             "draw a disjoint independent sample from later in the dump."
+    )
     args = parser.parse_args()
 
     extract(
@@ -543,6 +557,7 @@ def main() -> None:
         flush_every=args.flush_every,
         n_workers=args.workers,
         chunksize=args.chunksize,
+        skip=args.skip,
     )
 
 
