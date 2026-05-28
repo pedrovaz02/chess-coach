@@ -787,6 +787,54 @@ project is taken further.
 
 ---
 
+## 10. Reproducibility on a disjoint sample
+
+### 10.1 The test
+
+Everything so far was trained on the first 5M kept games of the April-2026
+dump. To check the findings aren't an artifact of that particular slice,
+`dump_extract --skip 8_500_000` drew a second, **disjoint** 5M-game sample
+(games 8.5M–16.5M of the stream). `scripts/compare_samples.py` then ran the
+full analysis on both and matched clusters across runs by nearest centroid
+(Hungarian assignment — K-Means labels are arbitrary).
+
+Note the two samples are disjoint in *games* but overlap ~59% in *players*
+(a player active across the month appears in both, represented by different
+games). That's the right setup for testing whether a player's *style* is
+stable: do different games of the same player, plus a different population
+mix, reproduce the same cluster structure?
+
+### 10.2 Result: the structure replicates almost exactly
+
+| Cluster (matched)        | Rating v1/v2 | score_res v1/v2 | key feature v1/v2 | ACPL v1/v2 |
+| ---                      | ---          | ---             | ---               | ---        |
+| Quick 1.e4 amateur       | 1431 / 1441  | −0.05 / −0.06   | 84% / 83% e4      | 78.6 / 78.4|
+| Underrated overperformer | 1540 / 1528  | +0.11 / +0.11   | 83% / 83% e4      | 70.6 / 71.3|
+| 1.e4 grinder             | 1789 / 1793  | −0.02 / −0.02   | 86% / 86% e4      | 68.2 / 68.2|
+| Queenside king-hunter    | 1415 / 1414  | −0.00 / −0.00   | 41% / 42% O-O-O   | 91.2 / 91.9|
+| 1.d4 specialist          | 1740 / 1753  | +0.01 / +0.01   | 48% / 48% d4      | 66.6 / 66.0|
+
+All five clusters reappear with near-identical profiles — ratings within
+~12 points, opening percentages within 1–2 points, score residual identical
+to two decimals, ACPL within ~1 cp. Silhouette curves overlap; the GMM BIC
+curves have the same flat shape (different absolute scale, same "no natural
+K" pattern).
+
+The Phase 3 accuracy finding replicates too: the Queenside king-hunter is
+the least accurate cluster (~91 cp) and the 1.d4 specialist the most
+accurate (~66 cp) in *both* samples, ordering preserved.
+
+### 10.3 What this buys
+
+Two disjoint 5M samples producing the same five clusters, the same
+continuum signal, and the same accuracy ordering is strong evidence the
+structure is a real property of the Lichess population, not noise from one
+slice. Combined with § 9 (it's a continuum) the honest summary is: **the
+style space is smooth and stable — K-Means carves it into five reproducible
+reference regions.**
+
+---
+
 ## Reading list / references
 
 - Lichess open database: <https://database.lichess.org/>
