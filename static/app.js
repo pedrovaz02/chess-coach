@@ -7,6 +7,26 @@ const submitBtn = document.getElementById("submit-btn");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 
+let recMode = "cluster";
+const MODE_HINTS = {
+  cluster:
+    "<strong>Cluster:</strong> snap you to one of five playstyle clusters. " +
+    "We’ll fetch your last 100 rated games (takes 5–10 seconds).",
+  knn:
+    "<strong>Neighbourhood (kNN):</strong> pool openings from the players most " +
+    "similar to you in style space — no hard cluster boundary. Truer to the " +
+    "continuum the data actually has.",
+};
+
+document.querySelectorAll(".mode-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    recMode = btn.dataset.mode;
+    document.getElementById("mode-hint").innerHTML = MODE_HINTS[recMode];
+  });
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const username = usernameInput.value.trim();
@@ -16,7 +36,9 @@ form.addEventListener("submit", async (event) => {
   resultsEl.classList.add("hidden");
 
   try {
-    const res = await fetch(`/recommend/${encodeURIComponent(username)}`);
+    const res = await fetch(
+      `/recommend/${encodeURIComponent(username)}?mode=${recMode}`
+    );
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const detail = data.detail || `Server responded ${res.status}`;
@@ -53,7 +75,12 @@ function showStatus(message, kind = null) {
 }
 
 function render(data) {
-  document.getElementById("cluster-id").textContent = `C${data.cluster.id}`;
+  const knn = data.mode === "knn";
+
+  // Cluster id chip — meaningless in kNN mode (no discrete cluster).
+  const idEl = document.getElementById("cluster-id");
+  idEl.textContent = knn ? "kNN" : `C${data.cluster.id}`;
+
   document.getElementById("cluster-name").textContent = data.cluster.name;
   document.getElementById("cluster-blurb").textContent = data.cluster.blurb;
   document.getElementById("user-rating").textContent = Math.round(data.user_rating);
@@ -61,18 +88,36 @@ function render(data) {
   document.getElementById("cluster-size").textContent = `${data.cluster.size.toLocaleString()} players`;
   document.getElementById("n-games").textContent = data.n_games_used;
 
+  // Relabel the stat cards to match the mode.
+  document.querySelector('[data-stat="rating-label"]').textContent =
+    knn ? "Neighbourhood avg rating" : "Cluster avg rating";
+  document.querySelector('[data-stat="size-label"]').textContent =
+    knn ? "Neighbourhood size" : "Cluster size";
+
   const acplEl = document.getElementById("cluster-acpl");
+  const acplBox = acplEl.closest("div");
   if (data.cluster.accuracy) {
     const acpl = Math.round(data.cluster.accuracy.avg_acpl);
     const blunder = (data.cluster.accuracy.avg_blunder_rate * 100).toFixed(1);
     acplEl.textContent = `${acpl} cp loss · ${blunder}% blunders`;
+    acplBox.classList.remove("hidden");
   } else {
-    acplEl.textContent = "—";
+    // No accuracy stat in kNN mode — hide the card rather than show a dash.
+    acplBox.classList.toggle("hidden", knn);
+    if (!knn) acplEl.textContent = "—";
   }
 
   renderOpenings(document.getElementById("white-openings"), data.top_openings.white);
   renderOpenings(document.getElementById("black-openings"), data.top_openings.black);
-  renderComparison(data.feature_comparison);
+
+  // The feature-vs-cluster-mean table only applies to cluster mode.
+  const why = document.getElementById("why-match");
+  if (knn || !data.feature_comparison.length) {
+    why.classList.add("hidden");
+  } else {
+    why.classList.remove("hidden");
+    renderComparison(data.feature_comparison);
+  }
 }
 
 function renderOpenings(listEl, openings) {

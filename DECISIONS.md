@@ -347,6 +347,50 @@ a reason to raise K.
 
 ![K=10 characterisation](docs/figures/10_k10_characterisation.png)
 
+**Follow-up: we built the Black-defence feature.** The K=10 read said "Black
+defence choice is an axis K=5 under-resolves." So we added three features next
+to the existing `pct_sicilian_as_black` — `pct_french_as_black`,
+`pct_carokann_as_black`, `pct_e5_as_black` (how Black answers 1.e4) — and
+re-clustered on the 21-feature matrix (`features_bdef.parquet`,
+`scripts/inspect_k.py --features ...`).
+
+The defence axis turned out to be *the* dominant structure once measured. At
+**K=5** on the new features the clusters reorganise almost entirely around
+Black's reply, and the silhouette actually rises (0.083 → 0.106):
+
+| # | n      | Rating | Identity (new features)        |
+| - | ------ | ------ | ------------------------------ |
+| 0 | 52,222 | 1,647  | Mixed 1.e4 / 1...e5            |
+| 1 | 27,596 | 1,795  | **Sicilian specialist** (85%)  |
+| 2 | 47,212 | 1,428  | Quick 1.e4 amateur (1...e5)    |
+| 3 | 12,775 | 1,698  | **Caro-Kann specialist** (92%) |
+| 4 | 14,705 | 1,685  | **French specialist** (89%)    |
+
+Mean dominant-K5 share collapses to **41%** (vs 73% at K=10 without these
+features): these are *genuinely new* groupings, not rating splits. The Sicilian
+specialist that K=10 needed ten clusters to isolate now emerges at K=5 — and
+Caro-Kann and French specialists appear alongside it. At K=6 the same three
+defence identities hold *and* a 1.d4 specialist is preserved (silhouette 0.100).
+
+**The trade-off (why this is not a free win).** Adding four features that all
+measure one thing (Black's defence) makes that dimension dominate the distance
+metric. The new clusters are clean *defence repertoires* but they dissolve the
+old White-side / behavioural identities — the "Queenside king-hunter" and the
+crisp "1.d4 specialist" are gone. So this is a **product-framing choice**, not a
+quality bug: organise the recommender around *Black's defensive repertoire*
+(new) or around a *blend of White openings + aggression + skill* (production).
+Silhouette favours the defence framing, but interpretability is comparable and
+the production model is already trained, validated and deployed on 18 features.
+
+**Decision (for now): production stays on 18 features.** The 21-feature change
+lives only in `features.py` locally and is *not* pushed — promoting it means
+retraining `kmeans.joblib`/`scaler.joblib`, regenerating `recommendations.json`,
+re-writing every cluster profile/blurb, and redeploying. That is a deliberate
+v2 ("repertoire mode"), not a hotfix. The experiment is recorded here; the
+feature code is ready if/when we choose to ship repertoire-based clusters.
+
+![K=6 characterisation](docs/figures/10_k6_characterisation.png)
+
 ---
 
 ### 4.3 Chess style is a continuum, not clusters
@@ -372,6 +416,49 @@ of the problem.
 **Outcome.** This is the headline finding of the project. Honest in the
 README, defensible in an interview. The next iteration would experiment with
 GMM (soft clusters) or continuous similarity instead of clustering.
+
+---
+
+### 4.4 kNN (continuum) recommender — acting on the finding
+
+**Context.** § 4.3 says the style space is a continuum, yet the recommender
+snapped each player to one of five hard clusters. Two stylistically identical
+players either side of a centroid boundary get different recommendations —
+exactly the artefact a continuum warrants avoiding.
+
+**Decision.** Add a second recommender that drops the boundaries: find the *k*
+nearest players to the query in the same 18-dim scaled style space, pool *their*
+games, and rank openings with the identical skill-adjusted residual + shrinkage.
+Ship it as a toggle on the site (`mode=cluster` | `mode=knn`), not a
+replacement — the clusters stay the interpretable default.
+
+**Why these parameters.** k=2000 (~1.3 % of 154 k — local but enough games per
+family for stable estimates) and shrinkage_k=2000. Calibrated empirically:
+k=500 surfaced offbeat noise (Van Geet, Van't Kruijs); k=2000 yields mainstream,
+rating-appropriate lines while still personalising. Validated by agreement —
+for a textbook "1.e4 grinder" the kNN and cluster paths return the same core
+openings (Scotch/Vienna/Center Game), confirming kNN isn't drifting; it just
+adapts more smoothly off-centre.
+
+**Serving.** The live API can't hold the 784 MB games file, so
+`scripts/build_knn_index.py` precomputes three artifacts: the scaled matrix
+(`knn_matrix.npy`, 11 MB), row-aligned meta, and per-(player, colour, family)
+`n`+`sum_score_diff` building blocks — filtered at build time to colour-
+appropriate rows using the *same* `effective_color_expr` the games ranker uses,
+so the API just pools the survivors and gets a **byte-identical** answer to the
+offline games path (verified). The colour-filtered table is 12 MB.
+
+**Footgun fixed along the way.** The serving code selected the working-tree
+`FEATURE_COLUMNS`, which now carries the experimental 21 features (§ 4.2). The
+production scaler expects 18, so `/recommend` and `/versus` 500'd locally. Fixed
+by reading the production feature order from `recommendations.json`
+(`feature_columns`) everywhere features are scaled — serving is now decoupled
+from the mutable feature list, so the 21-feature experiment can live in the code
+without breaking the deployed 18-feature model.
+
+**Outcome.** The site now offers both: discrete cluster identities (legible) and
+a continuum-native neighbourhood (faithful to the geometry). The kNN path is the
+"better architecture" § 4.3 pointed at, now actually built and served.
 
 ---
 

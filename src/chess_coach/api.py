@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from chess_coach.collector import fetch_games, game_to_row
-from chess_coach.features import FEATURE_COLUMNS, build_player_features
+from chess_coach.features import build_player_features
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +37,7 @@ class AppState:
     kmeans: Any = None
     scaler: Any = None
     recommendations: dict | None = None
+    knn: Any = None  # ServingIndex for the continuum recommender
 
 
 state = AppState()
@@ -44,11 +45,19 @@ state = AppState()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from chess_coach.knn_recommender import load_serving_index
+
     state.kmeans = joblib.load(DATA_DIR / "models" / "kmeans.joblib")
     state.scaler = joblib.load(DATA_DIR / "models" / "scaler.joblib")
     state.recommendations = json.loads(
         (DATA_DIR / "recommendations.json").read_text()
     )
+    # kNN serving artifacts are optional — the cluster recommender works
+    # without them, so a missing index just disables continuum mode.
+    try:
+        state.knn = load_serving_index()
+    except FileNotFoundError:
+        state.knn = None
     yield
 
 
@@ -68,7 +77,19 @@ def health() -> dict:
 
 
 @app.get("/recommend/{username}")
-def recommend(username: str, max_games: int = 100) -> JSONResponse:
+def recommend(username: str, max_games: int = 100, mode: str = "cluster") -> JSONResponse:
+    """Opening recommendations for a Lichess user.
+
+    mode="cluster" (default): snap to the nearest K-Means cluster, return that
+    cluster's precomputed openings.
+    mode="knn": pool the openings of the k nearest players in style space —
+    the continuum-native recommender (no hard cluster boundary).
+    """
+    if mode not in ("cluster", "knn"):
+        raise HTTPException(status_code=400, detail="mode must be 'cluster' or 'knn'")
+    if mode == "knn" and state.knn is None:
+        raise HTTPException(status_code=503, detail="kNN index not available")
+
     # Bound the cost an anonymous caller can impose on Lichess.
     max_games = max(20, min(max_games, 200))
 
@@ -94,8 +115,16 @@ def recommend(username: str, max_games: int = 100) -> JSONResponse:
     features = build_player_features(games_df, min_games=1)
     user_row = features.row(0, named=True)
 
-    X = features.select(FEATURE_COLUMNS).to_numpy()
+    # Production feature order from recommendations.json — the set the saved
+    # scaler/model were trained on. Decoupled from the working-tree
+    # FEATURE_COLUMNS, which may carry experimental extra features.
+    prod_cols = state.recommendations["feature_columns"]
+    X = features.select(prod_cols).to_numpy()
     X_scaled = state.scaler.transform(X)
+
+    if mode == "knn":
+        return JSONResponse(_knn_response(username, games_df, user_row, X_scaled))
+
     cluster_id = int(state.kmeans.predict(X_scaled)[0])
 
     # Look up the matching cluster's recommendations
@@ -112,11 +141,12 @@ def recommend(username: str, max_games: int = 100) -> JSONResponse:
             "cluster_mean": float(cluster_means[col]),
             "delta": float(user_row[col]) - float(cluster_means[col]),
         }
-        for col in FEATURE_COLUMNS
+        for col in prod_cols
     ]
 
     return JSONResponse({
         "username": username,
+        "mode": "cluster",
         "n_games_used": games_df.height,
         "user_rating": float(user_row["avg_rating"]),
         "cluster": {
@@ -130,6 +160,48 @@ def recommend(username: str, max_games: int = 100) -> JSONResponse:
         "top_openings": cluster_meta["top_openings"],
         "feature_comparison": feature_comparison,
     })
+
+
+def _knn_response(username: str, games_df, user_row, X_scaled) -> dict:
+    """Build the /recommend response for mode=knn.
+
+    Reuses the same response shape as the cluster path (the frontend renders
+    one card), where the 'cluster' block describes the style neighbourhood
+    instead of a discrete cluster.
+    """
+    import numpy as np
+
+    from chess_coach.knn_recommender import recommend_served
+
+    idx = state.knn
+    # Leave-one-out if the query player is in the training index.
+    hit = np.where(idx.usernames == username)[0]
+    exclude = int(hit[0]) if hit.size else None
+    query = X_scaled.astype(np.float32)
+
+    out = recommend_served(idx, query, exclude_idx=exclude)
+    blurb = (
+        f"Openings pooled from the {out['k']:,} players most similar to you in "
+        f"style space (ratings {out['neighbour_rating_min']:.0f}–"
+        f"{out['neighbour_rating_max']:.0f}, mean {out['neighbour_rating_mean']:.0f}). "
+        f"No hard cluster boundary — a smooth neighbourhood on the playstyle continuum."
+    )
+    return {
+        "username": username,
+        "mode": "knn",
+        "n_games_used": games_df.height,
+        "user_rating": float(user_row["avg_rating"]),
+        "cluster": {
+            "id": None,
+            "name": "Your style neighbourhood",
+            "blurb": blurb,
+            "size": out["k"],
+            "avg_rating": out["neighbour_rating_mean"],
+            "accuracy": None,
+        },
+        "top_openings": {"white": out["white"], "black": out["black"]},
+        "feature_comparison": [],
+    }
 
 
 @app.get("/versus/{player_a}/{player_b}")

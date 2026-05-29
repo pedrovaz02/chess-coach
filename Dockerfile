@@ -26,6 +26,9 @@ COPY --chown=user src/ ./src/
 COPY --chown=user static/ ./static/
 COPY --chown=user data/recommendations.json ./data/recommendations.json
 COPY --chown=user data/models/ ./data/models/
+# kNN (neighbourhood) recommender serving index
+COPY --chown=user data/knn_player_meta.parquet ./data/knn_player_meta.parquet
+COPY --chown=user data/knn_family_stats.parquet ./data/knn_family_stats.parquet
 
 # Install the project itself (registers entry points)
 RUN uv sync --frozen --no-dev

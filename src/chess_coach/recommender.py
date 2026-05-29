@@ -66,6 +66,40 @@ _FALLBACK_BLACK_PATTERNS = (
 _FALLBACK_REGEX = "(?i)" + "|".join(_FALLBACK_BLACK_PATTERNS)
 
 
+def family_expr() -> pl.Expr:
+    """The opening *family* — the part of opening_name before the first colon."""
+    return pl.col("opening_name").str.split(":").list.get(0).str.strip_chars()
+
+
+def effective_color_expr() -> pl.Expr:
+    """Per-row 'whose choice is this opening' — 'white' or 'black'.
+
+    Three-step lookup: family (most general) -> full name -> regex fallback.
+    Family alone catches "Italian Game: Two Knights Defense" via "Italian
+    Game". Full-name catches edge cases where the family root isn't its own
+    TSV entry (e.g. "King's Gambit Declined" only exists as ":X" variants).
+
+    Shared by the games-based ranking and the kNN serving precompute so both
+    classify identically (the serving table is built by filtering on this
+    expression, then the API just pools the surviving rows).
+    """
+    openings_db = _load_openings()
+    family = family_expr()
+    by_family = family.replace_strict(openings_db, default=None, return_dtype=pl.String)
+    by_full = pl.col("opening_name").replace_strict(
+        openings_db, default=None, return_dtype=pl.String
+    )
+    fallback_color = (
+        pl.when(pl.col("opening_name").str.contains(_FALLBACK_REGEX))
+        .then(pl.lit("black")).otherwise(pl.lit("white"))
+    )
+    return (
+        pl.when(by_family.is_not_null()).then(by_family)
+        .when(by_full.is_not_null()).then(by_full)
+        .otherwise(fallback_color)
+    )
+
+
 def opening_rankings(
     games: pl.DataFrame,
     clustered_players: pl.DataFrame,
@@ -74,9 +108,40 @@ def opening_rankings(
     min_games_in_opening: int = 1000,
     top_n: int = 5,
 ) -> pl.DataFrame:
-    """Top openings for a (cluster, color), ranked by skill-adjusted score
-    (mean of actual - Elo-expected) across all games of cluster members in
-    that opening. Filtered to openings with >= min_games_in_opening samples.
+    """Top openings for a (cluster, color) — convenience wrapper.
+
+    Derives the cluster's member usernames and delegates to
+    `rank_openings_for_members`. See that function for the full ranking logic.
+    """
+    members = clustered_players.filter(pl.col("cluster") == cluster).select("username")
+    return rank_openings_for_members(
+        games, members, color,
+        min_games_in_opening=min_games_in_opening, top_n=top_n,
+    )
+
+
+def rank_openings_for_members(
+    games: pl.DataFrame,
+    members: pl.DataFrame,
+    color: str,
+    min_games_in_opening: int = 1000,
+    top_n: int = 5,
+    shrinkage_k: int = 30_000,
+) -> pl.DataFrame:
+    """Top openings for an arbitrary set of players, ranked by skill-adjusted
+    score (mean of actual - Elo-expected) across all their games in that
+    opening. Filtered to openings with >= min_games_in_opening samples.
+
+    `shrinkage_k` sets how aggressively small-sample residuals are pulled to
+    zero (shrunk = n/(n+k) * residual). It must scale with the cohort size:
+    k=30k suits cluster-scale pooling (100k+ games/family), but a kNN
+    neighbourhood has only hundreds of games/family, so it passes a much
+    smaller k (see knn_recommender) or every residual collapses to ~0.
+
+    `members` is any DataFrame with a "username" column — a K-Means cluster's
+    members (the classic path) or the k nearest players in style space (the
+    continuum-native kNN path). Decoupling the ranking from *how* the cohort
+    was chosen is what lets both recommenders share this code.
 
     Color-appropriate filter:
         For color="white", we exclude openings characterised as Black's choice
@@ -90,7 +155,7 @@ def opening_rankings(
         Two openings can have the same raw win rate while one is played
         against weaker opposition. Score residual normalises for that.
     """
-    members = clustered_players.filter(pl.col("cluster") == cluster).select("username")
+    members = members.select("username")
 
     expected = 1.0 / (
         1.0 + (10.0 ** ((pl.col("opponent_rating") - pl.col("user_rating")) / 400.0))
@@ -103,52 +168,22 @@ def opening_rankings(
         .otherwise(0.0)
     )
 
-    # Color classification — by FAMILY name (part before first colon).
-    #
-    # Using the full name with sub-variation produces technically-correct but
-    # visually-confusing results: "Italian Game: Two Knights Defense, Max
-    # Lange Attack" classifies as White (Max Lange is White's attack), but the
-    # name reads "Defense" which the user expects in the Black column.
-    #
-    # Family-level rule: "Italian Game" anything → White, "Sicilian Defense"
-    # anything → Black, "Nimzo-Indian Defense" anything → Black, etc. Aligned
-    # with how chess players think about repertoire.
-    #
-    # Cost: White-led sub-variations of Black families (Smith-Morra Gambit,
-    # English Attack vs Najdorf, etc.) move to the Black column. That's the
-    # trade-off for column consistency.
-    openings_db = _load_openings()
-    family = pl.col("opening_name").str.split(":").list.get(0).str.strip_chars()
-
-    # Three-step lookup: family (most general) → full name → regex.
-    # Family alone catches "Italian Game: Two Knights Defense" via "Italian
-    # Game". Full-name catches edge cases where the family root isn't its own
-    # TSV entry (e.g., "King's Gambit Declined" only exists as ":X" variants).
-    by_family = family.replace_strict(openings_db, default=None, return_dtype=pl.String)
-    by_full = pl.col("opening_name").replace_strict(openings_db, default=None, return_dtype=pl.String)
-
-    fallback_is_black = pl.col("opening_name").str.contains(_FALLBACK_REGEX)
-    fallback_color = pl.when(fallback_is_black).then(pl.lit("black")).otherwise(pl.lit("white"))
-
-    effective_color = (
-        pl.when(by_family.is_not_null()).then(by_family)
-        .when(by_full.is_not_null()).then(by_full)
-        .otherwise(fallback_color)
-    )
-    color_filter = effective_color == color
+    # Color classification (whose choice is the opening) — see
+    # effective_color_expr. Aggregation is by FAMILY, but classification is
+    # per full name, so a row counts toward `color` only if the player played
+    # that colour AND the opening is that colour's choice.
+    family = family_expr()
+    color_filter = effective_color_expr() == color
 
     # Aggregate by FAMILY (not full opening_name). Sub-variations collapse
     # into "Sicilian Defense" etc. — readable, and larger sample per row.
     #
     # Ranking uses BAYESIAN SHRINKAGE on the score residual:
     #     shrunk = n / (n + k) * residual
-    # With k=30_000, an opening needs ~30k games before the residual is
-    # weighted at 50%. This penalises obscure openings (Borg, Elephant
-    # Gambit) where strong over-performance is mostly self-selection bias
-    # of the rare players who specialise in them. Mainstream openings
-    # (Italian, Sicilian) with 100k+ samples are barely shrunk.
-    SHRINKAGE_K = 30_000
-
+    # An opening needs ~k games before its residual is weighted at 50%. This
+    # penalises obscure openings (Borg, Elephant Gambit) where strong
+    # over-performance is mostly self-selection bias of the rare players who
+    # specialise in them. k must scale with the cohort (see the parameter doc).
     return (
         games.join(members, on="username", how="inner")
         .filter(
@@ -165,7 +200,7 @@ def opening_rankings(
         )
         .filter(pl.col("n") >= min_games_in_opening)
         .with_columns(
-            score_residual=pl.col("n") / (pl.col("n") + SHRINKAGE_K)
+            score_residual=pl.col("n") / (pl.col("n") + shrinkage_k)
             * pl.col("raw_residual")
         )
         .sort("score_residual", descending=True)
@@ -178,18 +213,21 @@ def opening_rankings(
 def render_recommendations(
     console: Console,
     username: str,
-    cluster: int,
+    cluster: int | None,
     white: pl.DataFrame,
     black: pl.DataFrame,
     verbose: bool = False,
 ) -> None:
-    console.print(
-        f"\n[bold green]{username}[/bold green] -> cluster [bold]{cluster}[/bold]"
-    )
-    console.print(
-        "[dim]Openings ranked by how well players with your style profile "
-        "have historically done with them.[/dim]\n"
-    )
+    # cluster=None: caller (e.g. the kNN recommender) already printed its own
+    # header and just wants the opening tables.
+    if cluster is not None:
+        console.print(
+            f"\n[bold green]{username}[/bold green] -> cluster [bold]{cluster}[/bold]"
+        )
+        console.print(
+            "[dim]Openings ranked by how well players with your style profile "
+            "have historically done with them.[/dim]\n"
+        )
 
     for color, df in (("White", white), ("Black", black)):
         if df.is_empty():

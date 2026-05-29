@@ -27,7 +27,7 @@ from rich.console import Console
 from rich.table import Table
 
 from chess_coach.collector import fetch_games, game_to_row
-from chess_coach.features import FEATURE_COLUMNS, build_player_features
+from chess_coach.features import build_player_features
 
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -42,7 +42,11 @@ def _profile(username: str, scaler, model, recs: dict) -> dict:
         raise ValueError(f"No rated games found for '{username}'")
     feats = build_player_features(pl.DataFrame(rows), min_games=1)
     row = feats.row(0, named=True)
-    X = feats.select(FEATURE_COLUMNS).to_numpy()
+    # Use the production feature order the scaler/model were trained on, read
+    # from recommendations.json — NOT the working-tree FEATURE_COLUMNS, which
+    # may carry experimental extra features (see DECISIONS § 4.2).
+    cols = recs["feature_columns"]
+    X = feats.select(cols).to_numpy()
     cluster_id = int(model.predict(scaler.transform(X))[0])
     meta = next(c for c in recs["clusters"] if c["id"] == cluster_id)
     return {"username": username, "features": row, "cluster": meta,
@@ -93,6 +97,9 @@ def mutual_openings(white_cluster: dict, black_cluster: dict, top_n: int = 6) ->
 def build_versus_payload(a: dict, b: dict) -> dict:
     """JSON-serialisable comparison of two profiled players (for the API)."""
     fa, fb = a["features"], b["features"]
+    # Production feature order = the keys of the cluster's feature_means
+    # (written from the 18-feature training set), not FEATURE_COLUMNS.
+    cols = list(a["cluster"]["feature_means"].keys())
     feature_comparison = sorted(
         (
             {
@@ -101,7 +108,7 @@ def build_versus_payload(a: dict, b: dict) -> dict:
                 "b": float(fb[c]),
                 "delta": float(fa[c]) - float(fb[c]),
             }
-            for c in FEATURE_COLUMNS
+            for c in cols
         ),
         key=lambda r: abs(r["delta"]),
         reverse=True,

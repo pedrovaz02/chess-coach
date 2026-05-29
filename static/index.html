@@ -38,7 +38,14 @@
         >
         <button type="submit" id="submit-btn">Recommend</button>
       </div>
-      <p class="hint">We&rsquo;ll fetch your last 100 rated games (takes 5&ndash;10 seconds).</p>
+      <div class="mode-toggle" role="radiogroup" aria-label="Recommendation mode">
+        <button type="button" class="mode-btn active" data-mode="cluster">Cluster</button>
+        <button type="button" class="mode-btn" data-mode="knn">Neighbourhood (kNN)</button>
+      </div>
+      <p class="hint" id="mode-hint">
+        <strong>Cluster:</strong> snap you to one of five playstyle clusters.
+        We&rsquo;ll fetch your last 100 rated games (takes 5&ndash;10 seconds).
+      </p>
     </form>
 
     <section id="status" class="hidden" aria-live="polite"></section>
@@ -52,8 +59,8 @@
         <p class="blurb" id="cluster-blurb"></p>
         <dl class="cluster-stats">
           <div><dt>Your rating</dt><dd id="user-rating"></dd></div>
-          <div><dt>Cluster avg rating</dt><dd id="cluster-rating"></dd></div>
-          <div><dt>Cluster size</dt><dd id="cluster-size"></dd></div>
+          <div><dt data-stat="rating-label">Cluster avg rating</dt><dd id="cluster-rating"></dd></div>
+          <div><dt data-stat="size-label">Cluster size</dt><dd id="cluster-size"></dd></div>
           <div><dt>Games analysed</dt><dd id="n-games"></dd></div>
           <div><dt>Cluster avg accuracy</dt><dd id="cluster-acpl"></dd></div>
         </dl>

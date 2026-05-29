@@ -165,6 +165,33 @@ button:disabled {
   border-bottom-color: var(--accent);
 }
 
+/* ── Mode toggle (Cluster vs Neighbourhood) ───────────────────────────── */
+
+.mode-toggle {
+  display: inline-flex;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.mode-btn {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 7px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mode-btn:hover { background: var(--accent-soft); color: var(--text); }
+
+.mode-btn.active { background: var(--accent); color: #fff; }
+.mode-btn.active:hover { background: #5c6d44; color: #fff; }
+
 /* ── Versus ───────────────────────────────────────────────────────────── */
 
 .vs-sep {

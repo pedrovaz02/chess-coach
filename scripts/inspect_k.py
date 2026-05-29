@@ -41,18 +41,19 @@ K5_NAMES = {
 
 # Most discriminating features to show in the characterisation.
 SHOW = ["score_residual", "pct_e4_as_white", "pct_d4_as_white",
-        "pct_sicilian_as_black", "pct_queenside_castle", "avg_castle_move",
-        "mate_rate", "timeout_rate", "avg_moves", "opening_diversity"]
+        "pct_sicilian_as_black", "pct_french_as_black", "pct_carokann_as_black",
+        "pct_e5_as_black", "pct_queenside_castle", "mate_rate", "timeout_rate"]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--k", type=int, default=10)
+    ap.add_argument("--features", type=Path, default=DATA_DIR / "features.parquet")
     args = ap.parse_args()
     K = args.k
     console = Console(width=160)
 
-    feats = pl.read_parquet(DATA_DIR / "features.parquet")
+    feats = pl.read_parquet(args.features)
     clustered = pl.read_parquet(DATA_DIR / "players_clustered.parquet")
     console.print(f"Loaded {feats.height:,} players")
 

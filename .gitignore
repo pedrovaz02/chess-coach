@@ -15,10 +15,14 @@ data/*
 !data/.gitkeep
 # Artefactos pequenos necessários ao inference (deploy)
 !data/recommendations.json
+# Índice kNN servido pela API (recomendador de vizinhança)
+!data/knn_player_meta.parquet
+!data/knn_family_stats.parquet
 !data/models/
 data/models/*
 !data/models/kmeans.joblib
 !data/models/scaler.joblib
+!data/models/knn_matrix.npy
 
 # IDE
 .vscode/

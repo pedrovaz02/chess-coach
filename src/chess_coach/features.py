@@ -75,7 +75,11 @@ FEATURE_COLUMNS = [
     "opening_diversity",
     "pct_e4_as_white",
     "pct_d4_as_white",
+    # ── Black's defence choice vs 1.e4 (shares among Black-vs-e4 games) ─
     "pct_sicilian_as_black",
+    "pct_french_as_black",
+    "pct_carokann_as_black",
+    "pct_e5_as_black",
     # ── Tier 1 move-level (parsed from PGN) ──────────────────────────
     "avg_castle_move",
     "pct_queenside_castle",
@@ -259,7 +263,15 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
     # Opening family flags
     is_e4_opening = pl.col("eco_letter").is_in(["B", "C"])  # 1.e4 systems
     is_d4_opening = pl.col("eco_letter").is_in(["D", "E"])  # 1.d4 systems
+    # Black's reply to 1.e4, by ECO range:
+    #   Sicilian   B20-B99   (1...c5)
+    #   Caro-Kann  B10-B19   (1...c6)
+    #   French     C00-C19   (1...e6)
+    #   Open 1...e5 C20-C99  (king-pawn games)
     is_sicilian = (pl.col("eco_letter") == "B") & (pl.col("eco_num") >= 20)
+    is_carokann = (pl.col("eco_letter") == "B") & (pl.col("eco_num").is_between(10, 19))
+    is_french = (pl.col("eco_letter") == "C") & (pl.col("eco_num") <= 19)
+    is_e5 = (pl.col("eco_letter") == "C") & (pl.col("eco_num") >= 20)
 
     # Black-against-e4 games: opponent played e4, we're Black (ECO B or C)
     is_black_vs_e4 = is_black & is_e4_opening
@@ -334,6 +346,15 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
             pct_sicilian_as_black=pl.when(black_vs_e4_n > 0)
             .then((is_black_vs_e4 & is_sicilian).sum() / black_vs_e4_n)
             .otherwise(None),
+            pct_carokann_as_black=pl.when(black_vs_e4_n > 0)
+            .then((is_black_vs_e4 & is_carokann).sum() / black_vs_e4_n)
+            .otherwise(None),
+            pct_french_as_black=pl.when(black_vs_e4_n > 0)
+            .then((is_black_vs_e4 & is_french).sum() / black_vs_e4_n)
+            .otherwise(None),
+            pct_e5_as_black=pl.when(black_vs_e4_n > 0)
+            .then((is_black_vs_e4 & is_e5).sum() / black_vs_e4_n)
+            .otherwise(None),
             # ── Tier 1 move-level ─────────────────────────────────────
             avg_castle_move=pl.when(castled_n > 0)
             .then(pl.col("castle_ply").filter(has_castled).mean())
@@ -359,6 +380,15 @@ def build_player_features(games: pl.DataFrame, min_games: int = 20) -> pl.DataFr
             ),
             pl.col("pct_sicilian_as_black").fill_null(
                 pl.col("pct_sicilian_as_black").mean()
+            ),
+            pl.col("pct_carokann_as_black").fill_null(
+                pl.col("pct_carokann_as_black").mean()
+            ),
+            pl.col("pct_french_as_black").fill_null(
+                pl.col("pct_french_as_black").mean()
+            ),
+            pl.col("pct_e5_as_black").fill_null(
+                pl.col("pct_e5_as_black").mean()
             ),
             # Players who never castled / never had queens come off:
             # fill with dataset mean so clustering doesn't break.
